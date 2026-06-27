@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Policies · netwatch{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold mb-4">SSID Policies</h1>
+
+<p class="text-sm text-slate-400 mb-6">
+  Each policy controls which device kinds and owners may use the SSID.
+  When <em>auto-block unknown</em> is on, brand-new MACs joining the SSID
+  are blocked at the UniFi level and you get a notification.
+</p>
+
+<div class="space-y-3">
+  {% for p in policies %}
+  <details class="rounded-lg border border-slate-800 bg-slate-900/40 open:bg-slate-900/70">
+    <summary class="cursor-pointer px-4 py-3 flex items-center justify-between">
+      <div>
+        <span class="font-mono text-emerald-300">{{ p.ssid }}</span>
+        <span class="ml-2 text-slate-400 text-xs">VLAN {{ p.vlan or "—" }} · {{ p.internal_name }}</span>
+      </div>
+      <div class="text-xs">
+        {% if p.auto_block_unknown %}
+          <span class="px-2 py-0.5 rounded border border-rose-500/40 text-rose-300 bg-rose-500/10">auto-block</span>
+        {% else %}
+          <span class="px-2 py-0.5 rounded border border-slate-700 text-slate-400">notify-only</span>
+        {% endif %}
+      </div>
+    </summary>
+
+    <form class="px-4 pb-4 space-y-3" hx-post="/policies/{{ p.ssid }}" hx-swap="none">
+      <div class="grid grid-cols-2 gap-3 text-sm">
+        <label class="block">
+          <span class="text-slate-400">Internal name</span>
+          <input class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1"
+                 name="internal_name" value="{{ p.internal_name }}" />
+        </label>
+        <label class="block">
+          <span class="text-slate-400">VLAN</span>
+          <input class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1"
+                 type="number" name="vlan" value="{{ p.vlan or '' }}" />
+        </label>
+        <label class="block col-span-2">
+          <span class="text-slate-400">Allow kinds (comma-separated)</span>
+          <input class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1"
+                 name="allow_kinds" value="{{ p.allow_kinds | join(', ') }}" />
+        </label>
+        <label class="block col-span-2">
+          <span class="text-slate-400">Allow owners (comma-separated)</span>
+          <input class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1"
+                 name="allow_owners" value="{{ p.allow_owners | join(', ') }}" />
+        </label>
+        <label class="inline-flex items-center gap-2 col-span-2">
+          <input type="checkbox" name="auto_block_unknown"
+                 {% if p.auto_block_unknown %}checked{% endif %} />
+          <span>Auto-block unknown devices on this SSID</span>
+        </label>
+        <label class="block col-span-2">
+          <span class="text-slate-400">Description</span>
+          <textarea class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1"
+                    name="description" rows="2">{{ p.description }}</textarea>
+        </label>
+      </div>
+      <button class="px-3 py-1.5 rounded-md border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 text-sm">
+        Save
+      </button>
+    </form>
+  </details>
+  {% endfor %}
+</div>
+{% endblock %}

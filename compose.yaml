@@ -1,0 +1,42 @@
+name: netwatch
+
+services:
+  netwatch:
+    # Local-dev build. For prod use:
+    #   image: ghcr.io/dodgerbluee/netwatch:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ghcr.io/dodgerbluee/netwatch:dev
+    container_name: netwatch
+    restart: unless-stopped
+    ports:
+      - "8099:8099"
+    volumes:
+      - ./data:/data
+    env_file:
+      - .env
+    environment:
+      NETWATCH_DATA_DIR: /data
+      NETWATCH_LOG_LEVEL: INFO
+    networks:
+      - default
+
+  # Standalone Mosquitto for users who don't have the HA add-on running.
+  # Comment out in production if you point NETWATCH_MQTT_HOST at Mosquitto
+  # already running inside Home Assistant.
+  mosquitto:
+    profiles: ["standalone"]
+    image: eclipse-mosquitto:2
+    container_name: netwatch-mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./scripts/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+
+volumes:
+  mosquitto_data:
+  mosquitto_log:

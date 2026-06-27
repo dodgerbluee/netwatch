@@ -1,0 +1,60 @@
+# --- runtime / data ---
+data/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite-*
+secrets.env
+.env
+.env.*
+!.env.example
+
+# --- python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.venv/
+venv/
+ENV/
+
+# --- testing ---
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.mypy_cache/
+.ruff_cache/
+
+# --- editors ---
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# --- node (for tailwind build, if we use a node toolchain) ---
+node_modules/
+package-lock.json
+
+# --- generated assets ---
+src/netwatch/web/static/app.css

@@ -1,0 +1,60 @@
+{# Renders one row. Used inline on the index page and as the htmx swap target. #}
+<tr id="device-{{ d.mac | replace(':','-') }}" class="hover:bg-slate-900/60">
+  <td class="px-3 py-2">
+    {% set badge = {
+      'unapproved': 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+      'known':      'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+      'flagged':    'bg-rose-500/20 text-rose-300 border-rose-500/40',
+      'blocked':    'bg-slate-500/20 text-slate-300 border-slate-500/40',
+    }[d.status] %}
+    <span class="inline-block px-2 py-0.5 rounded-md border text-xs {{ badge }}">{{ d.status }}</span>
+    {% if d.is_online %}<span class="ml-1 text-emerald-400">●</span>{% endif %}
+  </td>
+  <td class="px-3 py-2 font-medium">{{ d.name or "(unnamed)" }}</td>
+  <td class="px-3 py-2 font-mono text-xs text-slate-400">{{ d.mac }}</td>
+  <td class="px-3 py-2">{{ d.kind }}</td>
+  <td class="px-3 py-2">{{ d.owner or "—" }}</td>
+  <td class="px-3 py-2">{{ d.last_ssid or "—" }}</td>
+  <td class="px-3 py-2 text-slate-400">
+    {{ d.last_seen_at.strftime("%Y-%m-%d %H:%M") if d.last_seen_at else "—" }}
+  </td>
+  <td class="px-3 py-2 text-right space-x-1">
+    {% if d.status != "known" %}
+      <button
+        class="px-2 py-1 text-xs rounded-md border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10"
+        hx-post="/devices/{{ d.mac }}/approve"
+        hx-vals='{{ {
+          "kind": (d.kind if d.kind != "unknown" else "personal"),
+          "owner": d.owner,
+          "allowed_ssids": d.last_ssid,
+          "name": d.name
+        } | tojson }}'
+        hx-target="#device-{{ d.mac | replace(':','-') }}"
+        hx-swap="outerHTML"
+      >Approve</button>
+    {% endif %}
+    {% if d.status != "flagged" %}
+      <button
+        class="px-2 py-1 text-xs rounded-md border border-rose-500/40 text-rose-300 hover:bg-rose-500/10"
+        hx-post="/devices/{{ d.mac }}/flag"
+        hx-target="#device-{{ d.mac | replace(':','-') }}"
+        hx-swap="outerHTML"
+      >Flag</button>
+    {% endif %}
+    {% if d.status == "blocked" %}
+      <button
+        class="px-2 py-1 text-xs rounded-md border border-slate-500/40 text-slate-200 hover:bg-slate-500/10"
+        hx-post="/devices/{{ d.mac }}/unblock"
+        hx-target="#device-{{ d.mac | replace(':','-') }}"
+        hx-swap="outerHTML"
+      >Unblock</button>
+    {% else %}
+      <button
+        class="px-2 py-1 text-xs rounded-md border border-slate-500/40 text-slate-200 hover:bg-slate-500/10"
+        hx-post="/devices/{{ d.mac }}/block"
+        hx-target="#device-{{ d.mac | replace(':','-') }}"
+        hx-swap="outerHTML"
+      >Block</button>
+    {% endif %}
+  </td>
+</tr>

@@ -1,0 +1,69 @@
+name: Netwatch
+version: "0.1.0"
+slug: netwatch
+description: WiFi device watcher for UniFi + Home Assistant
+url: https://github.com/dodgerbluee/netwatch
+arch:
+  - amd64
+  - aarch64
+image: ghcr.io/dodgerbluee/netwatch
+init: false
+host_network: false
+hassio_api: false
+homeassistant_api: false
+auth_api: false
+ingress: true
+ingress_port: 8099
+ingress_stream: false
+panel_icon: mdi:shield-wifi
+panel_title: Netwatch
+ports:
+  8099/tcp: 8099
+ports_description:
+  8099/tcp: Web UI (forwarded for direct access; ingress also enabled)
+map:
+  - share:rw
+options:
+  log_level: INFO
+  enforcement_enabled: false
+  unifi:
+    host: https://192.168.1.1
+    site: default
+    username: ""
+    password: ""
+    verify_tls: false
+    bootstrap_grace_seconds: 120
+  mqtt:
+    host: core-mosquitto
+    port: 1883
+    username: ""
+    password: ""
+    discovery_prefix: homeassistant
+    base_topic: netwatch
+  opnsense:
+    host: ""
+    api_key: ""
+    api_secret: ""
+schema:
+  log_level: list(DEBUG|INFO|WARNING|ERROR)
+  enforcement_enabled: bool
+  unifi:
+    host: url
+    site: str
+    username: str
+    password: password
+    verify_tls: bool
+    bootstrap_grace_seconds: int(0,3600)
+  mqtt:
+    host: str
+    port: port
+    username: str?
+    password: password?
+    discovery_prefix: str
+    base_topic: str
+  opnsense:
+    host: str?
+    api_key: password?
+    api_secret: password?
+services:
+  - mqtt:need

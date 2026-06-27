@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en" class="bg-slate-950 text-slate-100">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}netwatch{% endblock %}</title>
+  <script src="https://unpkg.com/htmx.org@2.0.3" defer></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><text y='20' font-size='20'>📡</text></svg>" />
+</head>
+<body class="min-h-screen">
+  <nav class="border-b border-slate-800 bg-slate-900/80 backdrop-blur">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4 flex-wrap">
+      <a href="/" class="text-lg font-semibold tracking-tight">📡 netwatch</a>
+      <div class="flex items-center gap-3 text-sm flex-wrap">
+        <a href="/" class="hover:text-emerald-400">Devices</a>
+        <a href="/policies" class="hover:text-emerald-400">Policies</a>
+        <a href="/history" class="hover:text-emerald-400">History</a>
+
+        <button
+          class="px-2 py-1 rounded-md border border-slate-700 text-slate-300 hover:border-emerald-500/40 hover:text-emerald-300 text-xs"
+          hx-post="/sync/unifi-aliases"
+          hx-target="#sync-status"
+          hx-swap="innerHTML"
+          hx-indicator="#sync-spinner"
+          title="Pull friendly client names from UniFi"
+        >
+          <span id="sync-spinner" class="htmx-indicator">⟳</span>
+          Sync UniFi names
+        </button>
+        <span id="sync-status" class="text-xs text-slate-500"></span>
+
+        <a
+          href="/export"
+          class="px-2 py-1 rounded-md border border-slate-700 text-slate-300 hover:border-emerald-500/40 hover:text-emerald-300 text-xs"
+          title="Download a consistent SQLite snapshot"
+        >Export</a>
+
+        <button
+          class="px-2 py-1 rounded-md border border-slate-700 text-slate-300 hover:border-amber-500/40 hover:text-amber-300 text-xs"
+          onclick="document.getElementById('import-modal').classList.remove('hidden')"
+          title="Replace the database from a snapshot file"
+        >Import</button>
+
+        <span class="text-slate-500">v{{ request.app.version }}</span>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Import modal -->
+  <div id="import-modal" class="hidden fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-lg max-w-md w-full p-6 space-y-4">
+      <h2 class="text-lg font-bold">Import database</h2>
+      <p class="text-sm text-slate-300">
+        This will <span class="text-rose-300">replace every device, sighting, and policy</span>
+        in this instance. A safety copy of the current DB is saved as
+        <code class="text-xs">netwatch.db.pre-restore</code> in the data directory.
+      </p>
+      <form hx-post="/import"
+            hx-target="#import-status"
+            hx-swap="innerHTML"
+            hx-encoding="multipart/form-data"
+            class="space-y-3">
+        <label class="block text-sm">
+          <span class="text-slate-400">Snapshot file (.db)</span>
+          <input type="file" name="snapshot" accept=".db,application/vnd.sqlite3" required
+                 class="mt-1 w-full text-xs bg-slate-950 border border-slate-700 rounded px-2 py-1" />
+        </label>
+        <label class="block text-sm">
+          <span class="text-slate-400">Type <code class="text-rose-300">REPLACE</code> to confirm</span>
+          <input type="text" name="confirm" required autocomplete="off"
+                 class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono" />
+        </label>
+        <div id="import-status" class="text-xs"></div>
+        <div class="flex justify-end gap-2">
+          <button type="button"
+                  class="px-3 py-1.5 rounded-md border border-slate-700 text-slate-300 hover:border-slate-500 text-sm"
+                  onclick="document.getElementById('import-modal').classList.add('hidden')">
+            Cancel
+          </button>
+          <button type="submit"
+                  class="px-3 py-1.5 rounded-md border border-rose-500/40 text-rose-300 hover:bg-rose-500/10 text-sm">
+            Import &amp; replace
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <main class="max-w-7xl mx-auto px-4 py-6">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="max-w-7xl mx-auto px-4 py-6 text-xs text-slate-500">
+    enforcement:
+    {% if settings and settings.enforcement_enabled %}
+      <span class="text-emerald-400">ON</span>
+    {% else %}
+      <span class="text-amber-400">OFF — auto-block disabled</span>
+    {% endif %}
+  </footer>
+</body>
+</html>

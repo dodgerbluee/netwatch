@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}History · netwatch{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+  <h1 class="text-2xl font-bold">History</h1>
+  <form action="/history" class="text-sm">
+    <input type="text" name="mac" placeholder="filter by MAC" value="{{ filter_mac }}"
+           class="bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono text-xs w-64" />
+  </form>
+</div>
+
+<div class="overflow-x-auto rounded-lg border border-slate-800">
+  <table class="min-w-full text-sm">
+    <thead class="bg-slate-900 text-slate-400 uppercase text-xs">
+      <tr>
+        <th class="px-3 py-2 text-left">When</th>
+        <th class="px-3 py-2 text-left">Event</th>
+        <th class="px-3 py-2 text-left">MAC</th>
+        <th class="px-3 py-2 text-left">SSID</th>
+        <th class="px-3 py-2 text-left">IP</th>
+        <th class="px-3 py-2 text-left">RSSI</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-800">
+      {% for s in sightings %}
+      <tr class="hover:bg-slate-900/60">
+        <td class="px-3 py-2 text-slate-400 whitespace-nowrap">{{ s.observed_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+        <td class="px-3 py-2">{{ s.event }}</td>
+        <td class="px-3 py-2 font-mono text-xs">{{ s.mac }}</td>
+        <td class="px-3 py-2">{{ s.ssid or "—" }}</td>
+        <td class="px-3 py-2 text-slate-400">{{ s.ip or "—" }}</td>
+        <td class="px-3 py-2 text-slate-400">{{ s.rssi if s.rssi is not none else "—" }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="px-3 py-10 text-center text-slate-500">No history yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
