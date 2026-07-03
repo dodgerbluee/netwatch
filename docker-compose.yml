@@ -1,0 +1,12 @@
+services:
+  netwatch:
+    image: ghcr.io/dodgerbluee/netwatch:latest
+    container_name: netwatch
+    restart: unless-stopped
+    ports:
+      - "8099:8099"
+    volumes:
+      - netwatch-data:/data
+
+volumes:
+  netwatch-data:

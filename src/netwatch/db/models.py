@@ -192,6 +192,151 @@ class Action(Base):
     )
 
 
+# ---------------------------------------------------------------------------
+# Auth tables
+# ---------------------------------------------------------------------------
+
+
+class UserSource(StrEnum):
+    LOCAL = "local"      # username + password row created via the UI
+    OIDC = "oidc"        # auto-provisioned on first SSO login
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    username: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    display_name: Mapped[str] = mapped_column(String(128), default="")
+    email: Mapped[str] = mapped_column(String(255), default="", index=True)
+    # Empty for OIDC users — they never log in locally.
+    password_hash: Mapped[str] = mapped_column(String(255), default="")
+    source: Mapped[UserSource] = mapped_column(
+        String(16), default=UserSource.LOCAL
+    )
+    # Stable subject identifier for OIDC users so renaming in the IdP
+    # doesn't create a duplicate.
+    oidc_provider: Mapped[str] = mapped_column(String(64), default="")
+    oidc_subject: Mapped[str] = mapped_column(String(255), default="", index=True)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_disabled: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow
+    )
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    sessions: Mapped[list[Session]] = relationship(
+        back_populates="user", cascade="all, delete-orphan", passive_deletes=True
+    )
+
+
+class Session(Base):
+    __tablename__ = "sessions"
+
+    # Random opaque token stored in the user's cookie. Indexed because that's
+    # how we look up every authenticated request.
+    token: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), index=True
+    )
+    # For audit + revoke-all-other-sessions UX.
+    user_agent: Mapped[str] = mapped_column(String(255), default="")
+    ip: Mapped[str] = mapped_column(String(45), default="")
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow
+    )
+
+    user: Mapped[User] = relationship(back_populates="sessions")
+
+
+# ---------------------------------------------------------------------------
+# OIDC providers (configured via the Settings UI)
+# ---------------------------------------------------------------------------
+
+
+class OAuthProviderKind(StrEnum):
+    AUTHENTIK = "authentik"
+    GENERIC_OIDC = "generic_oidc"
+
+
+class OAuthProvider(Base):
+    __tablename__ = "oauth_providers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    display_name: Mapped[str] = mapped_column(String(128))
+    kind: Mapped[OAuthProviderKind] = mapped_column(
+        String(32), default=OAuthProviderKind.AUTHENTIK
+    )
+    client_id: Mapped[str] = mapped_column(String(255))
+    client_secret: Mapped[str] = mapped_column(String(255))
+    # OIDC discovery is run against `{issuer_url}/.well-known/openid-configuration`
+    # so admins don't paste per-endpoint URLs.
+    issuer_url: Mapped[str] = mapped_column(String(512))
+    # Comma-separated scopes string for easy admin editing.
+    scopes: Mapped[str] = mapped_column(String(255), default="openid,profile,email")
+    auto_register: Mapped[bool] = mapped_column(Boolean, default=True)
+    default_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
+
+
+class OAuthState(Base):
+    """Per-login-attempt state.
+
+    Persists the CSRF state, PKCE verifier, nonce, post-login next URL, and
+    which provider this attempt belongs to, so we can validate the IdP's
+    callback came from a flow we actually started. Short-lived (~10 min).
+    """
+
+    __tablename__ = "oauth_states"
+
+    state: Mapped[str] = mapped_column(String(64), primary_key=True)
+    provider_name: Mapped[str] = mapped_column(String(64), index=True)
+    code_verifier: Mapped[str] = mapped_column(String(128))
+    nonce: Mapped[str] = mapped_column(String(64))
+    redirect_uri: Mapped[str] = mapped_column(String(512))
+    next_url: Mapped[str] = mapped_column(String(512), default="/")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, index=True
+    )
+
+
 __table_args__ = (
     UniqueConstraint("ssid", name="uq_policies_ssid"),
 )
+
+
+# ---------------------------------------------------------------------------
+# App configuration (DB-backed runtime settings)
+# ---------------------------------------------------------------------------
+
+
+class AppConfig(Base):
+    """Key-value store for runtime configuration.
+
+    Each row is a config section (e.g. "unifi", "mqtt") with its values
+    stored as a JSON blob. This replaces env-var-based config for service
+    integrations so the app can be configured entirely through the web UI.
+    """
+
+    __tablename__ = "app_config"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[dict] = mapped_column(JSON, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )

@@ -39,7 +39,7 @@ async def run_mqtt_bridge(settings: Settings) -> None:
                 hostname=mqtt_cfg.host,
                 port=mqtt_cfg.port,
                 username=mqtt_cfg.username or None,
-                password=mqtt_cfg.password.get_secret_value() or None,
+                password=mqtt_cfg.password or None,
                 identifier=mqtt_cfg.client_id,
                 will=aiomqtt.Will(
                     topic=_topic(base, "status"),

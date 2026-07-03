@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en" class="bg-slate-950 text-slate-100">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>netwatch · login</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen flex items-center justify-center px-4">
+  <main class="max-w-sm w-full bg-slate-900/80 border border-slate-800 rounded-xl p-6 space-y-4">
+    <h1 class="text-2xl font-bold">📡 netwatch</h1>
+
+    {% if error %}
+      <div class="text-sm text-rose-300 bg-rose-500/10 border border-rose-500/40 rounded-md px-3 py-2">
+        {{ error }}
+      </div>
+    {% endif %}
+
+    <form method="post" action="/login" class="space-y-3 text-sm">
+      <input type="hidden" name="next" value="{{ next }}" />
+      <label class="block">
+        <span class="text-slate-400">Username</span>
+        <input name="username" required autocomplete="username"
+               class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 font-mono" />
+      </label>
+      <label class="block">
+        <span class="text-slate-400">Password</span>
+        <input type="password" name="password" required autocomplete="current-password"
+               class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5" />
+      </label>
+      <label class="inline-flex items-center gap-2">
+        <input type="checkbox" name="remember" checked />
+        <span class="text-slate-400">Remember me for 30 days</span>
+      </label>
+      <button class="w-full px-3 py-2 rounded-md border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10">
+        Sign in
+      </button>
+    </form>
+
+    <div id="oidc-providers" class="space-y-2"></div>
+
+    <script>
+      // Render any configured OIDC providers as "Sign in with X" buttons.
+      (async () => {
+        try {
+          const r = await fetch("/auth/oidc/providers");
+          if (!r.ok) return;
+          const { providers } = await r.json();
+          if (!providers || !providers.length) return;
+          const container = document.getElementById("oidc-providers");
+          const next = new URLSearchParams(location.search).get("next") || "{{ next }}";
+          const divider = document.createElement("div");
+          divider.className = "text-xs text-slate-500 text-center";
+          divider.textContent = "— or —";
+          container.appendChild(divider);
+          for (const p of providers) {
+            const a = document.createElement("a");
+            a.href = `/auth/oidc/login?provider=${encodeURIComponent(p.name)}&next=${encodeURIComponent(next)}`;
+            a.className = "block w-full text-center px-3 py-2 rounded-md border border-slate-700 text-slate-200 hover:border-emerald-500/40 hover:text-emerald-300 text-sm";
+            a.textContent = `Sign in with ${p.display_name}`;
+            container.appendChild(a);
+          }
+        } catch {}
+      })();
+    </script>
+  </main>
+</body>
+</html>

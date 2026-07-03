@@ -1,90 +1,28 @@
 """Runtime configuration.
 
-All settings load from environment variables prefixed `NETWATCH_`. The HA
-add-on wrapper translates its `options.json` into the same env vars, so a
-single config surface serves both deployment modes.
+Boot-time settings (port, data dir, log level) still load from env vars
+because they're needed before the DB is available. Everything else
+(UniFi, MQTT, OPNsense, enforcement, auth cookie tuning) lives in the
+DB and is configured through the web UI.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Any, Literal
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class UniFiSettings(BaseSettings):
-    """UniFi OS controller connection settings."""
-
-    model_config = SettingsConfigDict(env_prefix="NETWATCH_UNIFI_", extra="ignore")
-
-    host: str = Field(
-        default="https://192.168.1.1",
-        description="Base URL of the UniFi OS controller (UDM/UDR/UCG/CK2+).",
-    )
-    site: str = Field(default="default", description="UniFi site name.")
-    username: str = Field(default="", description="Local UniFi account username.")
-    password: SecretStr = Field(default=SecretStr(""), description="Account password.")
-    verify_tls: bool = Field(
-        default=False,
-        description="Verify the UniFi self-signed certificate. Default False for "
-        "out-of-the-box compatibility; set True after you install a cert.",
-    )
-
-    # Bootstrapping / safety knobs ----------------------------------------
-    bootstrap_grace_seconds: int = Field(
-        default=120,
-        description="Seconds after startup during which existing associations are "
-        "ingested without firing 'first seen' alerts. Prevents a notification "
-        "storm on first launch.",
-    )
-
-    @field_validator("host")
-    @classmethod
-    def _strip_trailing_slash(cls, value: str) -> str:
-        return value.rstrip("/")
+# ---------------------------------------------------------------------------
+# Boot-time settings (env vars only — needed before DB exists)
+# ---------------------------------------------------------------------------
 
 
-class MQTTSettings(BaseSettings):
-    """MQTT broker settings — typically the Mosquitto add-on inside HA."""
-
-    model_config = SettingsConfigDict(env_prefix="NETWATCH_MQTT_", extra="ignore")
-
-    host: str = Field(default="homeassistant.local")
-    port: int = Field(default=1883, ge=1, le=65535)
-    username: str = Field(default="")
-    password: SecretStr = Field(default=SecretStr(""))
-    discovery_prefix: str = Field(
-        default="homeassistant",
-        description="HA MQTT discovery prefix. Must match the HA Mosquitto integration.",
-    )
-    base_topic: str = Field(
-        default="netwatch",
-        description="Top-level topic netwatch publishes its own state under.",
-    )
-    client_id: str = Field(default="netwatch")
-
-
-class OPNsenseSettings(BaseSettings):
-    """OPNsense API settings (optional, phase-2 sync)."""
-
-    model_config = SettingsConfigDict(env_prefix="NETWATCH_OPNSENSE_", extra="ignore")
-
-    host: str = Field(default="")
-    api_key: SecretStr = Field(default=SecretStr(""))
-    api_secret: SecretStr = Field(default=SecretStr(""))
-    verify_tls: bool = Field(default=False)
-
-    @property
-    def enabled(self) -> bool:
-        return bool(self.host) and bool(self.api_key.get_secret_value())
-
-
-class Settings(BaseSettings):
-    """Top-level settings aggregator."""
-
+class BootSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="NETWATCH_",
         env_file=".env",
@@ -92,24 +30,11 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # service ------------------------------------------------------------
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(default="INFO")
-    http_host: str = Field(default="0.0.0.0")  # noqa: S104  binding inside a container
+    http_host: str = Field(default="0.0.0.0")  # noqa: S104
     http_port: int = Field(default=8099, ge=1, le=65535)
-    data_dir: Annotated[Path, Field(default=Path("/data"))]
+    data_dir: Path = Field(default=Path("/data"))
 
-    enforcement_enabled: bool = Field(
-        default=False,
-        description="Master kill-switch for block actions. Leave OFF during initial "
-        "bootstrap so you can populate known_devices without blocking anything.",
-    )
-
-    # composed ------------------------------------------------------------
-    unifi: UniFiSettings = Field(default_factory=UniFiSettings)
-    mqtt: MQTTSettings = Field(default_factory=MQTTSettings)
-    opnsense: OPNsenseSettings = Field(default_factory=OPNsenseSettings)
-
-    # derived -------------------------------------------------------------
     @property
     def db_path(self) -> Path:
         return self.data_dir / "netwatch.db"
@@ -119,11 +44,212 @@ class Settings(BaseSettings):
         return f"sqlite+aiosqlite:///{self.db_path}"
 
 
-@lru_cache(maxsize=1)
-def get_settings() -> Settings:
-    """Return the process-wide settings instance.
+# ---------------------------------------------------------------------------
+# DB-backed service configuration (plain dataclasses — no env coupling)
+# ---------------------------------------------------------------------------
 
-    Cached so tests can override by clearing the cache and re-importing.
+
+@dataclass
+class UniFiConfig:
+    host: str = ""
+    site: str = "default"
+    username: str = ""
+    password: str = ""
+    verify_tls: bool = False
+    bootstrap_grace_seconds: int = 120
+
+    @property
+    def configured(self) -> bool:
+        return bool(self.host and self.username and self.password)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "host": self.host.rstrip("/"),
+            "site": self.site,
+            "username": self.username,
+            "password": self.password,
+            "verify_tls": self.verify_tls,
+            "bootstrap_grace_seconds": self.bootstrap_grace_seconds,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> UniFiConfig:
+        return cls(
+            host=d.get("host", "").rstrip("/"),
+            site=d.get("site", "default"),
+            username=d.get("username", ""),
+            password=d.get("password", ""),
+            verify_tls=bool(d.get("verify_tls", False)),
+            bootstrap_grace_seconds=int(d.get("bootstrap_grace_seconds", 120)),
+        )
+
+
+@dataclass
+class MQTTConfig:
+    host: str = ""
+    port: int = 1883
+    username: str = ""
+    password: str = ""
+    discovery_prefix: str = "homeassistant"
+    base_topic: str = "netwatch"
+    client_id: str = "netwatch"
+
+    @property
+    def configured(self) -> bool:
+        return bool(self.host)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "host": self.host,
+            "port": self.port,
+            "username": self.username,
+            "password": self.password,
+            "discovery_prefix": self.discovery_prefix,
+            "base_topic": self.base_topic,
+            "client_id": self.client_id,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> MQTTConfig:
+        return cls(
+            host=d.get("host", ""),
+            port=int(d.get("port", 1883)),
+            username=d.get("username", ""),
+            password=d.get("password", ""),
+            discovery_prefix=d.get("discovery_prefix", "homeassistant"),
+            base_topic=d.get("base_topic", "netwatch"),
+            client_id=d.get("client_id", "netwatch"),
+        )
+
+
+@dataclass
+class OPNsenseConfig:
+    host: str = ""
+    api_key: str = ""
+    api_secret: str = ""
+    verify_tls: bool = False
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.host and self.api_key)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "host": self.host,
+            "api_key": self.api_key,
+            "api_secret": self.api_secret,
+            "verify_tls": self.verify_tls,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> OPNsenseConfig:
+        return cls(
+            host=d.get("host", ""),
+            api_key=d.get("api_key", ""),
+            api_secret=d.get("api_secret", ""),
+            verify_tls=bool(d.get("verify_tls", False)),
+        )
+
+
+@dataclass
+class AuthConfig:
+    cookie_name: str = "netwatch_session"
+    cookie_secret: str = ""
+    session_lifetime_days: int = 30
+    cookie_secure: bool = True
+    cookie_samesite: str = "lax"
+    external_url: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "cookie_name": self.cookie_name,
+            "session_lifetime_days": self.session_lifetime_days,
+            "cookie_secure": self.cookie_secure,
+            "cookie_samesite": self.cookie_samesite,
+            "external_url": self.external_url,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> AuthConfig:
+        return cls(
+            cookie_name=d.get("cookie_name", "netwatch_session"),
+            session_lifetime_days=int(d.get("session_lifetime_days", 30)),
+            cookie_secure=bool(d.get("cookie_secure", True)),
+            cookie_samesite=d.get("cookie_samesite", "lax"),
+            external_url=d.get("external_url", ""),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Unified Settings object
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class Settings:
+    """Unified settings object used throughout the app.
+
+    `boot` comes from env vars. Everything else is populated from the DB
+    after init_db() runs, via `load_from_db()`.
     """
 
+    boot: BootSettings = field(default_factory=BootSettings)
+
+    enforcement_enabled: bool = False
+    unifi: UniFiConfig = field(default_factory=UniFiConfig)
+    mqtt: MQTTConfig = field(default_factory=MQTTConfig)
+    opnsense: OPNsenseConfig = field(default_factory=OPNsenseConfig)
+    auth: AuthConfig = field(default_factory=AuthConfig)
+
+    # Convenience proxies so callers don't need to say settings.boot.X
+    @property
+    def log_level(self) -> str:
+        return self.boot.log_level
+
+    @property
+    def http_host(self) -> str:
+        return self.boot.http_host
+
+    @property
+    def http_port(self) -> int:
+        return self.boot.http_port
+
+    @property
+    def data_dir(self) -> Path:
+        return self.boot.data_dir
+
+    @property
+    def db_path(self) -> Path:
+        return self.boot.db_path
+
+    @property
+    def db_url(self) -> str:
+        return self.boot.db_url
+
+    async def load_from_db(self) -> None:
+        from netwatch.db.config_store import get_all_config
+
+        cfg = await get_all_config()
+        if "unifi" in cfg:
+            self.unifi = UniFiConfig.from_dict(cfg["unifi"])
+        if "mqtt" in cfg:
+            self.mqtt = MQTTConfig.from_dict(cfg["mqtt"])
+        if "opnsense" in cfg:
+            self.opnsense = OPNsenseConfig.from_dict(cfg["opnsense"])
+        if "general" in cfg:
+            self.enforcement_enabled = bool(cfg["general"].get("enforcement_enabled", False))
+        if "auth" in cfg:
+            secret = self.auth.cookie_secret
+            self.auth = AuthConfig.from_dict(cfg["auth"])
+            self.auth.cookie_secret = secret
+
+    async def save_section(self, section: str, data: dict[str, Any]) -> None:
+        from netwatch.db.config_store import set_config
+
+        await set_config(section, data)
+        await self.load_from_db()
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
     return Settings()

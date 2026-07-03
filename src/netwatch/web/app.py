@@ -27,8 +27,16 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from netwatch import __version__
+from netwatch.auth.deps import (
+    _RedirectToLogin,
+    current_user,
+    current_user_optional,
+    install_redirect_handler,
+)
+from netwatch.auth.routes import build_router as build_auth_router
+from netwatch.auth.sessions import get_active_session
 from netwatch.config import Settings
-from netwatch.db.models import DeviceKind, DeviceStatus
+from netwatch.db.models import DeviceKind, DeviceStatus, User
 from netwatch.db.repository import (
     list_devices,
     list_policies,
@@ -46,6 +54,84 @@ log = get_logger(__name__)
 PACKAGE_ROOT = Path(__file__).resolve().parent
 TEMPLATES_DIR = PACKAGE_ROOT / "templates"
 STATIC_DIR = PACKAGE_ROOT / "static"
+
+
+# Paths that NEVER require auth. Everything else does.
+PUBLIC_PATHS = {
+    "/healthz",
+    "/readyz",
+    "/setup",
+    "/login",
+    "/logout",
+    "/favicon.ico",
+    "/auth/oidc/providers",
+    "/auth/oidc/login",
+    "/auth/oidc/callback",
+}
+PUBLIC_PREFIXES = ("/static/",)
+
+
+def _is_public(path: str) -> bool:
+    if path in PUBLIC_PATHS:
+        return True
+    return any(path.startswith(p) for p in PUBLIC_PREFIXES)
+
+
+def _install_auth_middleware(app: FastAPI, settings: Settings) -> None:
+    """Block unauthenticated access to every non-public path.
+
+    Resolution: forward-auth headers first, then cookie session. On miss,
+    either redirect (HTML) or 401 (htmx/JSON).
+    """
+
+    from sqlalchemy import func, select
+
+    from netwatch.db.models import User as UserModel
+
+    @app.middleware("http")
+    async def auth_middleware(request, call_next):
+        path = request.url.path
+        if _is_public(path):
+            return await call_next(request)
+
+        # If there are no users at all, push everyone to setup.
+        async with session_scope() as s:
+            res = await s.execute(select(func.count(UserModel.id)))
+            user_count = int(res.scalar_one())
+        if user_count == 0:
+            from fastapi.responses import RedirectResponse
+
+            return RedirectResponse("/setup", status_code=303)
+
+        # Cookie session lookup
+        token = request.cookies.get(settings.auth.cookie_name, "")
+        if token:
+            async with session_scope() as s:
+                found = await get_active_session(s, token)
+            if found is not None:
+                _, user = found
+                request.state.user = user
+                return await call_next(request)
+
+        # No auth -> bounce
+        from fastapi.responses import JSONResponse, RedirectResponse
+
+        is_htmx = request.headers.get("HX-Request", "").lower() == "true"
+        accept = request.headers.get("Accept", "")
+        wants_html = "text/html" in accept or accept in ("", "*/*")
+        if is_htmx:
+            return JSONResponse(
+                {"error": "login required"},
+                status_code=401,
+                headers={"HX-Redirect": "/login"},
+            )
+        if wants_html:
+            from urllib.parse import quote
+
+            return RedirectResponse(
+                f"/login?next={quote(path, safe='/')}", status_code=303
+            )
+        return JSONResponse({"error": "login required"}, status_code=401)
 
 
 def create_app(
@@ -68,6 +154,12 @@ def create_app(
     if STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+    install_redirect_handler(app)
+    _install_auth_middleware(app, settings)
+    app.include_router(build_auth_router(settings=settings, templates=templates))
+    from netwatch.auth.oidc_routes import build_router as build_oidc_router
+
+    app.include_router(build_oidc_router(settings=settings, templates=templates))
     _register_routes(app)
     return app
 
@@ -94,9 +186,7 @@ def _register_routes(app: FastAPI) -> None:
                 await conn.exec_driver_sql("SELECT 1")
         except Exception as exc:  # noqa: BLE001
             raise HTTPException(status_code=503, detail=str(exc)) from exc
-        return {"status": "ready"}
-
-    # ----- HTML pages ----------------------------------------------------
+        return {"status": "ready"}    # ----- HTML pages ----------------------------------------------------
 
     @app.get("/", response_class=HTMLResponse)
     async def index(request: Request, status: str | None = None) -> HTMLResponse:

@@ -16,6 +16,7 @@
         <a href="/" class="hover:text-emerald-400">Devices</a>
         <a href="/policies" class="hover:text-emerald-400">Policies</a>
         <a href="/history" class="hover:text-emerald-400">History</a>
+        <a href="/settings" class="hover:text-emerald-400">Settings</a>
 
         <button
           class="px-2 py-1 rounded-md border border-slate-700 text-slate-300 hover:border-emerald-500/40 hover:text-emerald-300 text-xs"
@@ -43,6 +44,15 @@
         >Import</button>
 
         <span class="text-slate-500">v{{ request.app.version }}</span>
+        {% set me = request.state.user if request.state and request.state.user is defined else None %}
+        {% if me %}
+          <a href="/settings" class="text-xs text-slate-400 hover:text-emerald-400" title="{{ me.username }}">
+            {{ me.display_name or me.username }}
+          </a>
+          <form action="/logout" method="post" class="inline">
+            <button class="text-xs text-slate-500 hover:text-rose-300 underline-offset-2 hover:underline">logout</button>
+          </form>
+        {% endif %}
       </div>
     </div>
   </nav>

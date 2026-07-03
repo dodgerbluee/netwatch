@@ -2,10 +2,8 @@
 
 Starts:
   - FastAPI HTTP server (web UI + JSON API + healthz)
-  - UniFi event listener task
-  - MQTT publisher / subscriber task
-  - Periodic reconciler (polls UniFi REST every N seconds as a safety net
-    in case the websocket dropped an event)
+  - UniFi event listener task (when configured)
+  - MQTT publisher / subscriber task (when configured)
 
 Each subsystem runs as a supervised asyncio task. If any of them crash,
 the supervisor logs + retries with exponential backoff. The process only
@@ -29,17 +27,11 @@ from netwatch.web.app import create_app
 log = get_logger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Lifespan: bring services up before the HTTP server accepts traffic.
-# ---------------------------------------------------------------------------
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings: Settings = app.state.settings
     log.info("starting", version=app.version, data_dir=str(settings.data_dir))
 
-    # Defer imports so config side-effects (env loading) are predictable.
     from netwatch.db.session import init_db
     from netwatch.supervisor import Supervisor
 
@@ -56,18 +48,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create() -> FastAPI:
-    """Build the FastAPI application (callable for tests / asgi servers)."""
-
     settings = get_settings()
     configure_logging(settings.log_level)
-
     app = create_app(settings=settings, lifespan=lifespan)
     return app
 
 
 def run() -> None:
-    """Console-script entrypoint installed as `netwatch`."""
-
     settings = get_settings()
     configure_logging(settings.log_level)
 

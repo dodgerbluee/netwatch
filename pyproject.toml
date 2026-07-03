@@ -31,6 +31,11 @@ dependencies = [
     # mqtt
     "aiomqtt >=2.3,<3",
 
+    # auth
+    "argon2-cffi >=23.1,<26",
+    "itsdangerous >=2.2,<3",
+    "authlib >=1.3,<2",
+
     # logging
     "structlog >=24.1,<26",
 ]

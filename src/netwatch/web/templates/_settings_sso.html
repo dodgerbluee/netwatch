@@ -1,0 +1,186 @@
+<h2 class="font-semibold">Single sign-on (OIDC)</h2>
+<p class="text-xs text-slate-400">
+  Add an Authentik or generic OIDC provider here. After saving, a
+  "Sign in with X" button appears on the login page.
+</p>
+
+<div class="space-y-3">
+  {% for p in providers %}
+  <details class="rounded border border-slate-800 bg-slate-950/60"
+           {% if loop.first and providers | length == 1 %}open{% endif %}>
+    <summary class="cursor-pointer px-3 py-2 flex items-center justify-between">
+      <div>
+        <span class="font-mono text-emerald-300">{{ p.name }}</span>
+        <span class="ml-2 text-slate-400 text-xs">{{ p.kind }} · {{ p.display_name }}</span>
+      </div>
+      <div class="flex items-center gap-2 text-xs">
+        {% if p.enabled %}
+          <span class="px-2 py-0.5 rounded border border-emerald-500/40 text-emerald-300 bg-emerald-500/10">enabled</span>
+        {% else %}
+          <span class="px-2 py-0.5 rounded border border-slate-700 text-slate-400">disabled</span>
+        {% endif %}
+      </div>
+    </summary>
+
+    <form class="px-3 pb-3 space-y-2 text-sm"
+          hx-post="/settings/sso/{{ p.id }}"
+          hx-target="#sso-row-{{ p.id }}-status"
+          hx-swap="innerHTML">
+      <div class="grid grid-cols-2 gap-2">
+        <label class="block">
+          <span class="text-slate-400 text-xs">Display name</span>
+          <input name="display_name" value="{{ p.display_name }}" required
+                 class="mt-0.5 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1" />
+        </label>
+        <label class="block">
+          <span class="text-slate-400 text-xs">Kind</span>
+          <select name="kind"
+                  class="mt-0.5 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1">
+            {% for k in OAuthProviderKind %}
+              <option value="{{ k.value }}" {% if k == p.kind %}selected{% endif %}>{{ k.value }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="block col-span-2">
+          <span class="text-slate-400 text-xs">Issuer URL</span>
+          <input name="issuer_url" value="{{ p.issuer_url }}" required
+                 class="mt-0.5 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono text-xs" />
+        </label>
+        <label class="block">
+          <span class="text-slate-400 text-xs">Client ID</span>
+          <input name="client_id" value="{{ p.client_id }}" required
+                 class="mt-0.5 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono text-xs" />
+        </label>
+        <label class="block">
+          <span class="text-slate-400 text-xs">Client secret (leave blank to keep)</span>
+          <input type="password" name="client_secret" placeholder="•••••••• unchanged"
+                 class="mt-0.5 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono text-xs" />
+        </label>
+        <label class="block col-span-2">
+          <span class="text-slate-400 text-xs">Scopes (comma-separated)</span>
+          <input name="scopes" value="{{ p.scopes }}"
+                 class="mt-0.5 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono text-xs" />
+        </label>
+      </div>
+      <div class="flex items-center gap-4 text-xs flex-wrap">
+        <label class="inline-flex items-center gap-1">
+          <input type="checkbox" name="auto_register" {% if p.auto_register %}checked{% endif %} />
+          Auto-register new users
+        </label>
+        <label class="inline-flex items-center gap-1">
+          <input type="checkbox" name="default_admin" {% if p.default_admin %}checked{% endif %} />
+          Auto-registered users get admin
+        </label>
+        <label class="inline-flex items-center gap-1">
+          <input type="checkbox" name="enabled" {% if p.enabled %}checked{% endif %} />
+          Enabled
+        </label>
+      </div>
+      <div class="flex items-center justify-between pt-2">
+        <span id="sso-row-{{ p.id }}-status" class="text-xs"></span>
+        <div class="flex gap-2">
+          <button type="button"
+                  class="px-2 py-1 rounded border border-rose-500/40 text-rose-300 hover:bg-rose-500/10 text-xs"
+                  hx-post="/settings/sso/{{ p.id }}/delete"
+                  hx-target="#sso-row-{{ p.id }}-status"
+                  hx-confirm="Delete this OIDC provider?">
+            Delete
+          </button>
+          <button class="px-3 py-1 rounded border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 text-xs">
+            Save
+          </button>
+        </div>
+      </div>
+    </form>
+  </details>
+  {% else %}
+  <p class="text-xs text-slate-500">No providers configured yet.</p>
+  {% endfor %}
+</div>
+
+<!-- Create form -->
+<details class="rounded border border-slate-800 bg-slate-950/40 mt-4">
+  <summary class="cursor-pointer px-3 py-2 text-sm text-emerald-300">+ Add provider</summary>
+  <form class="px-3 pb-3 space-y-2 text-sm"
+        hx-post="/settings/sso"
+        hx-target="#sso-create-status"
+        hx-swap="innerHTML">
+    <div class="grid grid-cols-2 gap-2">
+      <label class="block">
+        <span class="text-slate-400 text-xs">Slug (URL-safe)</span>
+        <input name="name" required minlength="2" maxlength="64"
+               placeholder="authentik"
+               class="mt-0.5 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono" />
+      </label>
+      <label class="block">
+        <span class="text-slate-400 text-xs">Display name</span>
+        <input name="display_name" required
+               placeholder="Home Authentik"
+               class="mt-0.5 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1" />
+      </label>
+      <label class="block">
+        <span class="text-slate-400 text-xs">Kind</span>
+        <select name="kind"
+                class="mt-0.5 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1">
+          {% for k in OAuthProviderKind %}
+            <option value="{{ k.value }}">{{ k.value }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="block">
+        <span class="text-slate-400 text-xs">Scopes</span>
+        <input name="scopes" value="openid,profile,email"
+               class="mt-0.5 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono text-xs" />
+      </label>
+      <label class="block col-span-2">
+        <span class="text-slate-400 text-xs">Issuer URL (Authentik: <code>https://auth.example.com/application/o/&lt;slug&gt;/</code>)</span>
+        <input name="issuer_url" required
+               placeholder="https://auth.example.com/application/o/netwatch/"
+               class="mt-0.5 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono text-xs" />
+      </label>
+      <label class="block">
+        <span class="text-slate-400 text-xs">Client ID</span>
+        <input name="client_id" required
+               class="mt-0.5 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono text-xs" />
+      </label>
+      <label class="block">
+        <span class="text-slate-400 text-xs">Client secret</span>
+        <input type="password" name="client_secret" required
+               class="mt-0.5 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono text-xs" />
+      </label>
+    </div>
+    <div class="flex items-center gap-4 text-xs flex-wrap">
+      <label class="inline-flex items-center gap-1">
+        <input type="checkbox" name="auto_register" checked />
+        Auto-register new users
+      </label>
+      <label class="inline-flex items-center gap-1">
+        <input type="checkbox" name="default_admin" />
+        Auto-registered users get admin
+      </label>
+      <label class="inline-flex items-center gap-1">
+        <input type="checkbox" name="enabled" checked />
+        Enabled
+      </label>
+    </div>
+    <div class="flex items-center justify-between pt-2">
+      <span id="sso-create-status" class="text-xs"></span>
+      <button class="px-3 py-1 rounded border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 text-xs">
+        Create provider
+      </button>
+    </div>
+  </form>
+</details>
+
+<!-- Discovery tester -->
+<form class="mt-3 flex items-center gap-2 text-xs"
+      hx-post="/settings/sso/test"
+      hx-target="#sso-test-status"
+      hx-swap="innerHTML">
+  <input name="issuer_url" placeholder="Test discovery against issuer URL…"
+         class="flex-1 bg-slate-950 border border-slate-700 rounded px-2 py-1 font-mono" />
+  <button class="px-2 py-1 rounded border border-slate-700 text-slate-300 hover:border-emerald-500/40 hover:text-emerald-300">
+    Test
+  </button>
+  <span id="sso-test-status"></span>
+</form>

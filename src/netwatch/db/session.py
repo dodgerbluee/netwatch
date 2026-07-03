@@ -27,12 +27,7 @@ _session_factory: async_sessionmaker[AsyncSession] | None = None
 
 
 async def init_db(settings: Settings) -> None:
-    """Create data directory, open engine, and ensure schema exists.
-
-    Uses metadata.create_all for now; Alembic migrations come once the
-    schema starts evolving. The schema is small enough that a clean
-    create + idempotent re-run is acceptable for v0.
-    """
+    """Create data directory, open engine, and ensure schema exists."""
 
     global _engine, _session_factory
 
@@ -42,12 +37,10 @@ async def init_db(settings: Settings) -> None:
     _engine = create_async_engine(
         settings.db_url,
         echo=False,
-        # SQLite niceties:
         connect_args={"timeout": 30},
         pool_pre_ping=True,
     )
 
-    # Apply WAL + foreign keys on every new connection.
     @event.listens_for(_engine.sync_engine, "connect")
     def _set_sqlite_pragmas(dbapi_conn: object, _: object) -> None:  # pragma: no cover
         cur = dbapi_conn.cursor()  # type: ignore[attr-defined]
@@ -61,10 +54,20 @@ async def init_db(settings: Settings) -> None:
 
     _session_factory = async_sessionmaker(_engine, expire_on_commit=False)
 
-    # Seed default SSID policies if this is a fresh DB.
     from netwatch.db.seed import seed_default_policies_if_empty
 
     await seed_default_policies_if_empty()
+
+    from netwatch.auth.bootstrap import ensure_cookie_secret
+
+    ensure_cookie_secret(settings)
+
+    # Load DB-backed config into the settings object.
+    await settings.load_from_db()
+
+    from netwatch.auth.oidc import registry as oidc_registry
+
+    await oidc_registry.reload()
 
 
 def get_engine() -> AsyncEngine:
@@ -74,13 +77,6 @@ def get_engine() -> AsyncEngine:
 
 
 async def dispose_engine() -> None:
-    """Close the current engine and reset module-level state.
-
-    Used by `db.backup.restore_snapshot()` when swapping the underlying
-    SQLite file out from under us. After calling this, you MUST call
-    `init_db()` again before any DB access.
-    """
-
     global _engine, _session_factory
     if _engine is not None:
         await _engine.dispose()

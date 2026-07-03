@@ -26,7 +26,7 @@ from tenacity import (
     wait_exponential,
 )
 
-from netwatch.config import UniFiSettings
+from netwatch.config import UniFiConfig
 from netwatch.logging import get_logger
 
 log = get_logger(__name__)
@@ -39,7 +39,7 @@ class UnifiAuthError(RuntimeError):
 class UnifiClient:
     """Thin async wrapper around the UniFi OS HTTP + WS APIs."""
 
-    def __init__(self, settings: UniFiSettings) -> None:
+    def __init__(self, settings: UniFiConfig) -> None:
         self._settings = settings
         self._client: httpx.AsyncClient | None = None
         self._csrf: str | None = None
@@ -69,7 +69,7 @@ class UnifiClient:
             "/api/auth/login",
             json={
                 "username": self._settings.username,
-                "password": self._settings.password.get_secret_value(),
+                "password": self._settings.password,
                 "remember": True,
             },
         )

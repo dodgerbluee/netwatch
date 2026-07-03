@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en" class="bg-slate-950 text-slate-100">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Set up netwatch</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen flex items-center justify-center px-4">
+  <main class="max-w-md w-full bg-slate-900/80 border border-slate-800 rounded-xl p-6 space-y-4">
+    <h1 class="text-2xl font-bold">📡 First-run setup</h1>
+    <p class="text-sm text-slate-400">
+      Create the initial admin account for this netwatch instance. After this,
+      only admins can create new users from Settings.
+    </p>
+
+    {% if error %}
+      <div class="text-sm text-rose-300 bg-rose-500/10 border border-rose-500/40 rounded-md px-3 py-2">
+        {{ error }}
+      </div>
+    {% endif %}
+
+    <form method="post" action="/setup" class="space-y-3 text-sm">
+      <label class="block">
+        <span class="text-slate-400">Username</span>
+        <input name="username" required minlength="2" maxlength="64"
+               value="{{ username or '' }}" autocomplete="username"
+               class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 font-mono" />
+      </label>
+      <label class="block">
+        <span class="text-slate-400">Display name (optional)</span>
+        <input name="display_name" maxlength="128"
+               class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5" />
+      </label>
+      <label class="block">
+        <span class="text-slate-400">Password (8+ chars)</span>
+        <input type="password" name="password" required minlength="8" autocomplete="new-password"
+               class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5" />
+      </label>
+      <label class="block">
+        <span class="text-slate-400">Confirm password</span>
+        <input type="password" name="password_confirm" required minlength="8" autocomplete="new-password"
+               class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5" />
+      </label>
+      <button class="w-full px-3 py-2 rounded-md border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10">
+        Create admin
+      </button>
+    </form>
+  </main>
+</body>
+</html>

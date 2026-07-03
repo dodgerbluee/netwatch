@@ -20,7 +20,7 @@ Implementation plan when you're ready:
 
 from __future__ import annotations
 
-from netwatch.config import OPNsenseSettings
+from netwatch.config import OPNsenseConfig
 from netwatch.logging import get_logger
 
 log = get_logger(__name__)
@@ -29,7 +29,7 @@ log = get_logger(__name__)
 class OPNsenseClient:
     """Stub. Methods raise NotImplementedError until wired up."""
 
-    def __init__(self, settings: OPNsenseSettings) -> None:
+    def __init__(self, settings: OPNsenseConfig) -> None:
         self._settings = settings
 
     async def sync_macs(

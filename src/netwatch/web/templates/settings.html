@@ -1,0 +1,377 @@
+{% extends "base.html" %}
+{% block title %}Settings · netwatch{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold mb-4">Settings</h1>
+
+<div class="grid lg:grid-cols-2 gap-6">
+
+  <!-- General settings -->
+  {% if me.is_admin %}
+  <section class="rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-3">
+    <h2 class="font-semibold">General</h2>
+    <form class="space-y-2 text-sm"
+          hx-post="/settings/config/general"
+          hx-target="#general-status"
+          hx-swap="innerHTML">
+      <label class="inline-flex items-center gap-2">
+        <input type="checkbox" name="enforcement_enabled"
+               {{ 'checked' if settings.enforcement_enabled else '' }} />
+        <span>Enable auto-block enforcement</span>
+      </label>
+      <p class="text-xs text-slate-500">
+        When off, netwatch monitors and alerts but never blocks devices at UniFi.
+      </p>
+      <div id="general-status" class="text-xs"></div>
+      <button class="px-3 py-1.5 rounded-md border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 text-sm">
+        Save
+      </button>
+    </form>
+  </section>
+  {% endif %}
+
+  <!-- UniFi configuration -->
+  {% if me.is_admin %}
+  <section class="rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-3">
+    <h2 class="font-semibold">UniFi Controller</h2>
+    <form class="space-y-2 text-sm" id="unifi-form">
+      <label class="block">
+        <span class="text-slate-400">Host URL</span>
+        <input name="host" value="{{ settings.unifi.host }}" placeholder="https://192.168.1.1"
+               class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 font-mono" />
+      </label>
+      <label class="block">
+        <span class="text-slate-400">Site</span>
+        <input name="site" value="{{ settings.unifi.site or 'default' }}" placeholder="default"
+               class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 font-mono" />
+      </label>
+      <label class="block">
+        <span class="text-slate-400">Username</span>
+        <input name="username" value="{{ settings.unifi.username }}" autocomplete="off"
+               class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 font-mono" />
+      </label>
+      <label class="block">
+        <span class="text-slate-400">Password</span>
+        <input type="password" name="password"
+               value="{{ '__unchanged__' if settings.unifi.password else '' }}"
+               autocomplete="off"
+               class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5" />
+      </label>
+      <label class="inline-flex items-center gap-2">
+        <input type="checkbox" name="verify_tls"
+               {{ 'checked' if settings.unifi.verify_tls else '' }} />
+        <span>Verify TLS certificate</span>
+      </label>
+      <label class="block">
+        <span class="text-slate-400">Bootstrap grace (seconds)</span>
+        <input type="number" name="bootstrap_grace_seconds"
+               value="{{ settings.unifi.bootstrap_grace_seconds }}" min="0" max="600"
+               class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 font-mono" />
+      </label>
+      <div id="unifi-status" class="text-xs"></div>
+      <div class="flex gap-2">
+        <button type="button"
+                class="px-3 py-1.5 rounded-md border border-slate-700 text-slate-300 hover:border-emerald-500/40 text-sm"
+                hx-post="/settings/config/unifi/test"
+                hx-include="#unifi-form"
+                hx-target="#unifi-status"
+                hx-swap="innerHTML">
+          Test connection
+        </button>
+        <button type="submit"
+                class="px-3 py-1.5 rounded-md border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 text-sm"
+                hx-post="/settings/config/unifi"
+                hx-include="#unifi-form"
+                hx-target="#unifi-status"
+                hx-swap="innerHTML">
+          Save
+        </button>
+      </div>
+    </form>
+    {% if not settings.unifi.configured %}
+    <p class="text-xs text-amber-400">Not configured — UniFi listener is not running.</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  <!-- MQTT configuration -->
+  {% if me.is_admin %}
+  <section class="rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-3">
+    <h2 class="font-semibold">MQTT Broker</h2>
+    <form class="space-y-2 text-sm" id="mqtt-form">
+      <label class="block">
+        <span class="text-slate-400">Host</span>
+        <input name="host" value="{{ settings.mqtt.host }}" placeholder="homeassistant.local"
+               class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 font-mono" />
+      </label>
+      <label class="block">
+        <span class="text-slate-400">Port</span>
+        <input type="number" name="port" value="{{ settings.mqtt.port }}" min="1" max="65535"
+               class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 font-mono" />
+      </label>
+      <label class="block">
+        <span class="text-slate-400">Username</span>
+        <input name="username" value="{{ settings.mqtt.username }}" autocomplete="off"
+               class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 font-mono" />
+      </label>
+      <label class="block">
+        <span class="text-slate-400">Password</span>
+        <input type="password" name="password"
+               value="{{ '__unchanged__' if settings.mqtt.password else '' }}"
+               autocomplete="off"
+               class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5" />
+      </label>
+      <label class="block">
+        <span class="text-slate-400">Discovery prefix</span>
+        <input name="discovery_prefix" value="{{ settings.mqtt.discovery_prefix }}" placeholder="homeassistant"
+               class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 font-mono" />
+      </label>
+      <label class="block">
+        <span class="text-slate-400">Base topic</span>
+        <input name="base_topic" value="{{ settings.mqtt.base_topic }}" placeholder="netwatch"
+               class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 font-mono" />
+      </label>
+      <label class="block">
+        <span class="text-slate-400">Client ID</span>
+        <input name="client_id" value="{{ settings.mqtt.client_id }}" placeholder="netwatch"
+               class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 font-mono" />
+      </label>
+      <div id="mqtt-status" class="text-xs"></div>
+      <div class="flex gap-2">
+        <button type="button"
+                class="px-3 py-1.5 rounded-md border border-slate-700 text-slate-300 hover:border-emerald-500/40 text-sm"
+                hx-post="/settings/config/mqtt/test"
+                hx-include="#mqtt-form"
+                hx-target="#mqtt-status"
+                hx-swap="innerHTML">
+          Test connection
+        </button>
+        <button type="submit"
+                class="px-3 py-1.5 rounded-md border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 text-sm"
+                hx-post="/settings/config/mqtt"
+                hx-include="#mqtt-form"
+                hx-target="#mqtt-status"
+                hx-swap="innerHTML">
+          Save
+        </button>
+      </div>
+    </form>
+    {% if not settings.mqtt.configured %}
+    <p class="text-xs text-amber-400">Not configured — MQTT bridge is not running.</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  <!-- OPNsense configuration -->
+  {% if me.is_admin %}
+  <section class="rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-3">
+    <h2 class="font-semibold">OPNsense <span class="text-xs text-slate-500">(optional)</span></h2>
+    <form class="space-y-2 text-sm" id="opnsense-form"
+          hx-post="/settings/config/opnsense"
+          hx-target="#opnsense-status"
+          hx-swap="innerHTML">
+      <label class="block">
+        <span class="text-slate-400">Host URL</span>
+        <input name="host" value="{{ settings.opnsense.host }}" placeholder="https://opnsense.local"
+               class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 font-mono" />
+      </label>
+      <label class="block">
+        <span class="text-slate-400">API key</span>
+        <input name="api_key" value="{{ settings.opnsense.api_key }}" autocomplete="off"
+               class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 font-mono" />
+      </label>
+      <label class="block">
+        <span class="text-slate-400">API secret</span>
+        <input type="password" name="api_secret"
+               value="{{ '__unchanged__' if settings.opnsense.api_secret else '' }}"
+               autocomplete="off"
+               class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5" />
+      </label>
+      <label class="inline-flex items-center gap-2">
+        <input type="checkbox" name="verify_tls"
+               {{ 'checked' if settings.opnsense.verify_tls else '' }} />
+        <span>Verify TLS certificate</span>
+      </label>
+      <div id="opnsense-status" class="text-xs"></div>
+      <button class="px-3 py-1.5 rounded-md border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 text-sm">
+        Save
+      </button>
+    </form>
+  </section>
+  {% endif %}
+
+  <!-- Auth settings -->
+  {% if me.is_admin %}
+  <section class="rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-3">
+    <h2 class="font-semibold">Authentication</h2>
+    <form class="space-y-2 text-sm"
+          hx-post="/settings/config/auth"
+          hx-target="#auth-cfg-status"
+          hx-swap="innerHTML">
+      <label class="block">
+        <span class="text-slate-400">Session lifetime (days)</span>
+        <input type="number" name="session_lifetime_days"
+               value="{{ auth_settings.session_lifetime_days }}" min="1" max="365"
+               class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 font-mono" />
+      </label>
+      <label class="inline-flex items-center gap-2">
+        <input type="checkbox" name="cookie_secure"
+               {{ 'checked' if auth_settings.cookie_secure else '' }} />
+        <span>Secure cookies (requires HTTPS)</span>
+      </label>
+      <label class="block">
+        <span class="text-slate-400">SameSite</span>
+        <select name="cookie_samesite"
+                class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5">
+          <option value="lax" {{ 'selected' if auth_settings.cookie_samesite == 'lax' else '' }}>Lax</option>
+          <option value="strict" {{ 'selected' if auth_settings.cookie_samesite == 'strict' else '' }}>Strict</option>
+          <option value="none" {{ 'selected' if auth_settings.cookie_samesite == 'none' else '' }}>None</option>
+        </select>
+      </label>
+      <label class="block">
+        <span class="text-slate-400">External URL (for OIDC callbacks behind a proxy)</span>
+        <input name="external_url" value="{{ auth_settings.external_url }}"
+               placeholder="https://netwatch.example.com"
+               class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 font-mono" />
+      </label>
+      <div id="auth-cfg-status" class="text-xs"></div>
+      <button class="px-3 py-1.5 rounded-md border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 text-sm">
+        Save
+      </button>
+    </form>
+  </section>
+  {% endif %}
+
+  <!-- Your account -->
+  <section class="rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-3">
+    <h2 class="font-semibold">Your account</h2>
+    <dl class="text-sm grid grid-cols-3 gap-y-1">
+      <dt class="text-slate-400">Username</dt><dd class="col-span-2 font-mono">{{ me.username }}</dd>
+      <dt class="text-slate-400">Display</dt><dd class="col-span-2">{{ me.display_name or "—" }}</dd>
+      <dt class="text-slate-400">Source</dt><dd class="col-span-2">{{ me.source }}</dd>
+      <dt class="text-slate-400">Role</dt><dd class="col-span-2">{{ "admin" if me.is_admin else "user" }}</dd>
+    </dl>
+
+    {% if me.source == "local" %}
+      <form class="space-y-2 text-sm pt-3 border-t border-slate-800"
+            hx-post="/settings/password"
+            hx-target="#pw-status"
+            hx-swap="innerHTML">
+        <h3 class="font-medium text-slate-300">Change password</h3>
+        <input type="password" name="current_password" placeholder="Current password" required
+               class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5" />
+        <input type="password" name="new_password" placeholder="New password (8+ chars)" minlength="8" required
+               class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5" />
+        <input type="password" name="new_password_confirm" placeholder="Confirm new password" minlength="8" required
+               class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5" />
+        <div id="pw-status" class="text-xs"></div>
+        <button class="px-3 py-1.5 rounded-md border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 text-sm">
+          Update password
+        </button>
+      </form>
+    {% else %}
+      <p class="text-xs text-slate-400 pt-3 border-t border-slate-800">
+        This account is provisioned via SSO. Manage your password
+        at your identity provider.
+      </p>
+    {% endif %}
+  </section>
+
+  <!-- Single sign-on (OIDC) -->
+  {% if me.is_admin %}
+  <section class="rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-3"
+           id="sso-section"
+           hx-get="/settings/sso"
+           hx-trigger="load, sso:refresh from:body"
+           hx-swap="innerHTML">
+    <h2 class="font-semibold">Single sign-on (OIDC)</h2>
+    <p class="text-xs text-slate-400">Loading providers…</p>
+  </section>
+  {% endif %}
+
+  <!-- Users (admin only) -->
+  {% if me.is_admin %}
+  <section class="rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-3 lg:col-span-2">
+    <h2 class="font-semibold">Users</h2>
+    <div class="overflow-x-auto rounded border border-slate-800">
+      <table class="min-w-full text-sm">
+        <thead class="bg-slate-900 text-slate-400 uppercase text-xs">
+          <tr>
+            <th class="px-3 py-2 text-left">Username</th>
+            <th class="px-3 py-2 text-left">Display</th>
+            <th class="px-3 py-2 text-left">Source</th>
+            <th class="px-3 py-2 text-left">Role</th>
+            <th class="px-3 py-2 text-left">Status</th>
+            <th class="px-3 py-2 text-left">Last login</th>
+            <th class="px-3 py-2 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-800">
+          {% for u in users %}
+          <tr>
+            <td class="px-3 py-2 font-mono">{{ u.username }}</td>
+            <td class="px-3 py-2">{{ u.display_name or "—" }}</td>
+            <td class="px-3 py-2">{{ u.source }}</td>
+            <td class="px-3 py-2">{{ "admin" if u.is_admin else "user" }}</td>
+            <td class="px-3 py-2">
+              {% if u.is_disabled %}
+                <span class="text-rose-300">disabled</span>
+              {% else %}
+                <span class="text-emerald-300">active</span>
+              {% endif %}
+            </td>
+            <td class="px-3 py-2 text-slate-400 text-xs">
+              {{ u.last_login_at.strftime("%Y-%m-%d %H:%M") if u.last_login_at else "—" }}
+            </td>
+            <td class="px-3 py-2 text-right">
+              {% if u.id != me.id %}
+                {% if u.is_disabled %}
+                  <button class="px-2 py-1 text-xs rounded border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10"
+                          hx-post="/settings/users/{{ u.id }}/enable" hx-swap="none">Enable</button>
+                {% else %}
+                  <button class="px-2 py-1 text-xs rounded border border-rose-500/40 text-rose-300 hover:bg-rose-500/10"
+                          hx-post="/settings/users/{{ u.id }}/disable" hx-swap="none">Disable</button>
+                {% endif %}
+              {% else %}
+                <span class="text-xs text-slate-500">(you)</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <form class="grid sm:grid-cols-2 gap-2 text-sm pt-3 border-t border-slate-800"
+          hx-post="/settings/users"
+          hx-target="#new-user-status"
+          hx-swap="innerHTML">
+      <h3 class="font-medium text-slate-300 sm:col-span-2">Create user</h3>
+      <input name="username" placeholder="username" required minlength="2" maxlength="64"
+             class="bg-slate-950 border border-slate-700 rounded px-2 py-1.5 font-mono" />
+      <input name="display_name" placeholder="display name (optional)" maxlength="128"
+             class="bg-slate-950 border border-slate-700 rounded px-2 py-1.5" />
+      <input type="password" name="password" placeholder="password (8+)" minlength="8" required
+             class="bg-slate-950 border border-slate-700 rounded px-2 py-1.5 sm:col-span-2" />
+      <label class="inline-flex items-center gap-2 sm:col-span-2">
+        <input type="checkbox" name="is_admin" />
+        <span>Grant admin role</span>
+      </label>
+      <div id="new-user-status" class="text-xs sm:col-span-2"></div>
+      <button class="px-3 py-1.5 rounded-md border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 text-sm sm:col-span-2">
+        Create user
+      </button>
+    </form>
+
+    <div class="pt-3 border-t border-slate-800 text-xs flex items-center gap-3">
+      <button class="px-2 py-1 rounded border border-slate-700 text-slate-300 hover:border-emerald-500/40"
+              hx-post="/settings/sessions/purge" hx-target="#purge-status" hx-swap="innerHTML">
+        Purge expired sessions
+      </button>
+      <span id="purge-status"></span>
+    </div>
+  </section>
+  {% endif %}
+
+</div>
+{% endblock %}
