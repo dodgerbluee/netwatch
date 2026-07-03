@@ -215,7 +215,7 @@ def build_router(*, settings: Settings, templates: Jinja2Templates) -> APIRouter
                     i += 1
                 user = User(
                     username=candidate,
-                    display_name=identity.display_name or candidate,
+                    display_name=identity.display_name or "",
                     email=identity.email,
                     source=UserSource.OIDC,
                     oidc_provider=provider_name,

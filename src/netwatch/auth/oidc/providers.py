@@ -214,8 +214,8 @@ class AuthentikProvider(BaseOIDCProvider):
         if isinstance(groups, list):
             ident.groups = [str(g) for g in groups]
         # Authentik usually populates `name` and `preferred_username`.
-        if not ident.display_name:
-            ident.display_name = ident.username
+        # Don't fall back to username — leave display_name empty so we
+        # don't overwrite an existing display name with the username.
         return ident
 
 
