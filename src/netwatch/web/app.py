@@ -36,7 +36,9 @@ from netwatch.auth.deps import (
 from netwatch.auth.routes import build_router as build_auth_router
 from netwatch.auth.sessions import get_active_session
 from netwatch.config import Settings
-from netwatch.db.models import DeviceKind, DeviceStatus, User
+from sqlalchemy import update
+
+from netwatch.db.models import Device, DeviceKind, DeviceStatus, User
 from netwatch.db.repository import (
     list_devices,
     list_policies,
@@ -251,6 +253,24 @@ def _register_routes(app: FastAPI) -> None:
                 allowed_ssids=ssids,
                 name=name or None,
             )
+        return await _device_row(request, mac, templates)
+
+    @app.post("/devices/{mac}/rename", response_class=HTMLResponse)
+    async def rename(mac: str, request: Request, name: str = Form("")) -> HTMLResponse:
+        new_name = name.strip()
+        if not new_name:
+            raise HTTPException(400, "name is required")
+        async with session_scope() as session:
+            await session.execute(
+                update(Device).where(Device.mac == mac.lower()).values(name=new_name)
+            )
+        if settings.unifi.configured:
+            from netwatch.unifi.client import UnifiClient
+            try:
+                async with UnifiClient(settings.unifi) as unifi:
+                    await unifi.rename_client(mac, new_name)
+            except Exception as exc:  # noqa: BLE001
+                log.warning("ui.rename.unifi_failed", mac=mac, error=repr(exc))
         return await _device_row(request, mac, templates)
 
     @app.post("/devices/{mac}/flag", response_class=HTMLResponse)

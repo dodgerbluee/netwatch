@@ -103,6 +103,24 @@ class UnifiClient:
         )
         return list(data.get("data", []))
 
+    # ----- REST: rename --------------------------------------------------
+
+    async def rename_client(self, mac: str, name: str) -> bool:
+        """Set the friendly name (alias) for a client in UniFi."""
+        users = await self.list_known_clients()
+        user_id = None
+        for u in users:
+            if (u.get("mac") or "").lower() == mac.lower():
+                user_id = u.get("_id")
+                break
+        if not user_id:
+            log.warning("unifi.rename.not_found", mac=mac)
+            return False
+        return await self._put(
+            f"/proxy/network/api/s/{self._settings.site}/rest/user/{user_id}",
+            json={"name": name},
+        )
+
     # ----- REST: block / unblock ----------------------------------------
 
     async def block_client(self, mac: str) -> bool:
@@ -190,6 +208,22 @@ class UnifiClient:
             resp = await self._client.get(path, headers=self._headers())
         resp.raise_for_status()
         return resp.json()
+
+    async def _put(self, path: str, *, json: dict[str, Any]) -> bool:
+        assert self._client is not None
+        resp = await self._client.put(path, headers=self._headers(), json=json)
+        if resp.status_code == 401:
+            await self._login()
+            resp = await self._client.put(path, headers=self._headers(), json=json)
+        if resp.status_code >= 400:
+            log.warning(
+                "unifi.put.failed",
+                path=path,
+                status=resp.status_code,
+                body=resp.text[:200],
+            )
+            return False
+        return True
 
     async def _post(self, path: str, *, json: dict[str, Any]) -> bool:
         assert self._client is not None

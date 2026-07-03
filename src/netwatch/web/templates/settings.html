@@ -166,37 +166,7 @@
   {% if me.is_admin %}
   <section class="rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-3">
     <h2 class="font-semibold">OPNsense <span class="text-xs text-slate-500">(optional)</span></h2>
-    <form class="space-y-2 text-sm" id="opnsense-form"
-          hx-post="/settings/config/opnsense"
-          hx-target="#opnsense-status"
-          hx-swap="innerHTML">
-      <label class="block">
-        <span class="text-slate-400">Host URL</span>
-        <input name="host" value="{{ settings.opnsense.host }}" placeholder="https://opnsense.local"
-               class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 font-mono" />
-      </label>
-      <label class="block">
-        <span class="text-slate-400">API key</span>
-        <input name="api_key" value="{{ settings.opnsense.api_key }}" autocomplete="off"
-               class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 font-mono" />
-      </label>
-      <label class="block">
-        <span class="text-slate-400">API secret</span>
-        <input type="password" name="api_secret"
-               value="{{ '__unchanged__' if settings.opnsense.api_secret else '' }}"
-               autocomplete="off"
-               class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5" />
-      </label>
-      <label class="inline-flex items-center gap-2">
-        <input type="checkbox" name="verify_tls"
-               {{ 'checked' if settings.opnsense.verify_tls else '' }} />
-        <span>Verify TLS certificate</span>
-      </label>
-      <div id="opnsense-status" class="text-xs"></div>
-      <button class="px-3 py-1.5 rounded-md border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 text-sm">
-        Save
-      </button>
-    </form>
+    <p class="text-sm text-slate-400">OPNsense integration is not yet implemented. Configuration will be available in a future release.</p>
   </section>
   {% endif %}
 
