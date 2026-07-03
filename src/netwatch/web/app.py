@@ -190,10 +190,11 @@ def _register_routes(app: FastAPI) -> None:
 
     @app.get("/", response_class=HTMLResponse)
     async def index(request: Request, status: str | None = None) -> HTMLResponse:
+        effective = status if status is not None else "unapproved"
         async with session_scope() as session:
             devices = await list_devices(
                 session,
-                status=DeviceStatus(status) if status else None,
+                status=DeviceStatus(effective) if effective else None,
             )
             policies = await list_policies(session)
         return templates.TemplateResponse(
@@ -202,7 +203,7 @@ def _register_routes(app: FastAPI) -> None:
             {
                 "devices": devices,
                 "policies": policies,
-                "filter_status": status or "",
+                "filter_status": effective,
                 "settings": settings,
                 "DeviceKind": DeviceKind,
                 "DeviceStatus": DeviceStatus,

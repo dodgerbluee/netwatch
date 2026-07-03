@@ -192,6 +192,20 @@ def build_router(*, settings: Settings, templates: Jinja2Templates) -> APIRouter
             },
         )
 
+    @router.post("/settings/display-name", response_class=HTMLResponse)
+    async def change_display_name(
+        new_display_name: Annotated[str, Form(max_length=128)],
+        user: Annotated[User, Depends(current_user)],
+    ) -> HTMLResponse:
+        async with session_scope() as s:
+            db_user = await s.get(User, user.id)
+            assert db_user is not None
+            db_user.display_name = new_display_name.strip()
+        return HTMLResponse(
+            '<span class="text-emerald-300 text-xs">Display name updated.</span>'
+            '<script>setTimeout(() => location.reload(), 800)</script>'
+        )
+
     @router.post("/settings/password", response_class=HTMLResponse)
     async def change_password(
         request: Request,

@@ -252,6 +252,20 @@
       <dt class="text-slate-400">Role</dt><dd class="col-span-2">{{ "admin" if me.is_admin else "user" }}</dd>
     </dl>
 
+    <form class="space-y-2 text-sm pt-3 border-t border-slate-800"
+          hx-post="/settings/display-name"
+          hx-target="#dn-status"
+          hx-swap="innerHTML">
+      <h3 class="font-medium text-slate-300">Display name</h3>
+      <input name="new_display_name" value="{{ me.display_name or '' }}" placeholder="Display name"
+             maxlength="128"
+             class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5" />
+      <div id="dn-status" class="text-xs"></div>
+      <button class="px-3 py-1.5 rounded-md border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 text-sm">
+        Update
+      </button>
+    </form>
+
     {% if me.source == "local" %}
       <form class="space-y-2 text-sm pt-3 border-t border-slate-800"
             hx-post="/settings/password"
