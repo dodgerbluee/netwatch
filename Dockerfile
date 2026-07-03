@@ -28,19 +28,13 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     NETWATCH_DATA_DIR=/data
 
-# Non-root user; UID/GID 10001 to play well with HA add-on volume perms
-RUN groupadd --system --gid 10001 netwatch \
-    && useradd  --system --uid 10001 --gid netwatch --home-dir /app netwatch \
-    && mkdir -p /data /app \
-    && chown -R netwatch:netwatch /data /app
+RUN mkdir -p /data /app
 
 WORKDIR /app
 
 COPY --from=builder /wheels /wheels
 RUN pip install --no-index --find-links=/wheels netwatch \
     && rm -rf /wheels
-
-USER netwatch
 
 EXPOSE 8099
 
