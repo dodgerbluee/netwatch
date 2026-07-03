@@ -329,19 +329,27 @@ def _register_routes(app: FastAPI) -> None:
 
     @app.post("/sync/unifi-aliases", response_class=HTMLResponse)
     async def sync_aliases() -> HTMLResponse:
-        from netwatch.unifi.alias_sync import sync_unifi_aliases
+        from netwatch.unifi.alias_sync import full_sync
 
         try:
-            result = await sync_unifi_aliases(settings)
+            r = await full_sync(settings)
         except Exception as exc:  # noqa: BLE001
-            log.warning("ui.alias_sync.failed", error=repr(exc))
+            log.warning("ui.sync.failed", error=repr(exc))
             return HTMLResponse(
                 f'<span class="text-rose-300 text-xs">sync failed: {exc}</span>'
             )
+        parts = []
+        if r.aliases_updated:
+            parts.append(f"{r.aliases_updated} name{'s' if r.aliases_updated != 1 else ''}")
+        if r.online_marked:
+            parts.append(f"{r.online_marked} online")
+        if r.offline_marked:
+            parts.append(f"{r.offline_marked} offline")
+        if r.blocked_synced:
+            parts.append(f"{r.blocked_synced} blocked")
+        summary = ", ".join(parts) if parts else "everything up to date"
         return HTMLResponse(
-            f'<span class="text-emerald-300 text-xs">'
-            f'synced {result.updated} alias{"es" if result.updated != 1 else ""} '
-            f'({result.candidates} candidates / {result.missing} missing)</span>'
+            f'<span class="text-emerald-300 text-xs">synced: {summary}</span>'
         )
 
     # ----- Export / Import ----------------------------------------------

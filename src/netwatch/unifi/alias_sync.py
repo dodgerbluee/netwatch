@@ -1,20 +1,19 @@
-"""UniFi -> netwatch alias synchronization.
+"""UniFi -> netwatch synchronization.
 
-Pulls friendly client names from UniFi's `/rest/user` endpoint and applies
-them to netwatch's Device rows. UniFi-always-wins: any alias set in UniFi
-overwrites the netwatch `name` field.
-
-Used in three places:
-  - bootstrap (once at startup, after the active-client snapshot)
-  - daily background task (catches aliases you add in UniFi later)
-  - manual POST /sync/unifi-aliases from the web UI
+Pulls client data from UniFi and applies it to netwatch's Device rows:
+  - Friendly names (aliases) from /rest/user
+  - Online/offline status from /stat/sta (active clients)
+  - Blocked status from /rest/user (blocked flag)
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
+from sqlalchemy import update
+
 from netwatch.config import Settings
+from netwatch.db.models import Device, DeviceStatus
 from netwatch.db.repository import sync_unifi_alias
 from netwatch.db.session import session_scope
 from netwatch.logging import get_logger
@@ -25,24 +24,38 @@ log = get_logger(__name__)
 
 @dataclass(slots=True)
 class SyncResult:
-    fetched: int           # how many user records UniFi returned
-    candidates: int        # how many had a non-empty alias
-    updated: int           # how many netwatch rows actually changed
-    missing: int           # alias existed but device not yet in netwatch DB
+    fetched: int = 0
+    aliases_updated: int = 0
+    missing: int = 0
+    online_marked: int = 0
+    offline_marked: int = 0
+    blocked_synced: int = 0
 
 
 async def sync_unifi_aliases(settings: Settings) -> SyncResult:
-    """Run one sync pass. Safe to call concurrently — each call gets its own
-    UniFi session and its own DB transaction."""
+    """Legacy entry point — calls full_sync."""
+    return await full_sync(settings)
+
+
+async def full_sync(settings: Settings) -> SyncResult:
+    """Run a full sync pass: names, online/offline, and blocked status."""
 
     async with UnifiClient(settings.unifi) as unifi:
-        users = await unifi.list_known_clients()
+        known_clients = await unifi.list_known_clients()
+        active_clients = await unifi.list_active_clients()
 
-    candidates = [u for u in users if (u.get("name") or "").strip()]
-    updated = 0
-    missing = 0
+    active_macs = {(c.get("mac") or "").lower() for c in active_clients if c.get("mac")}
+    blocked_macs = {
+        (u.get("mac") or "").lower()
+        for u in known_clients
+        if u.get("blocked")
+    }
+
+    result = SyncResult(fetched=len(known_clients))
 
     async with session_scope() as session:
+        # 1. Sync aliases
+        candidates = [u for u in known_clients if (u.get("name") or "").strip()]
         for u in candidates:
             mac = (u.get("mac") or "").lower()
             if not mac:
@@ -54,26 +67,35 @@ async def sync_unifi_aliases(settings: Settings) -> SyncResult:
                 hostname=(u.get("hostname") or "").strip(),
             )
             if changed:
-                updated += 1
-            else:
-                # No-op either because alias matched or device row missing.
-                # Distinguish for telemetry purposes.
-                from netwatch.db.models import Device
+                result.aliases_updated += 1
+            elif await session.get(Device, mac) is None:
+                result.missing += 1
 
-                if await session.get(Device, mac) is None:
-                    missing += 1
+        # 2. Sync online/offline status
+        from sqlalchemy import select
 
-    result = SyncResult(
-        fetched=len(users),
-        candidates=len(candidates),
-        updated=updated,
-        missing=missing,
-    )
+        all_devices = (await session.execute(select(Device))).scalars().all()
+        for device in all_devices:
+            is_active = device.mac in active_macs
+            if device.is_online != is_active:
+                device.is_online = is_active
+                if is_active:
+                    result.online_marked += 1
+                else:
+                    result.offline_marked += 1
+
+        # 3. Sync blocked status from UniFi
+        for device in all_devices:
+            if device.mac in blocked_macs and device.status != DeviceStatus.BLOCKED:
+                device.status = DeviceStatus.BLOCKED
+                result.blocked_synced += 1
+
     log.info(
-        "unifi.alias_sync.done",
+        "unifi.full_sync.done",
         fetched=result.fetched,
-        candidates=result.candidates,
-        updated=result.updated,
-        missing=result.missing,
+        aliases=result.aliases_updated,
+        online=result.online_marked,
+        offline=result.offline_marked,
+        blocked=result.blocked_synced,
     )
     return result
