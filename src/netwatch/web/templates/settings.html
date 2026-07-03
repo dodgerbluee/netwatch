@@ -325,13 +325,18 @@
             </td>
             <td class="px-3 py-2 text-right">
               {% if u.id != me.id %}
-                {% if u.is_disabled %}
-                  <button class="px-2 py-1 text-xs rounded border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10"
-                          hx-post="/settings/users/{{ u.id }}/enable" hx-swap="none">Enable</button>
-                {% else %}
+                <div class="flex gap-1 justify-end">
+                  {% if u.is_disabled %}
+                    <button class="px-2 py-1 text-xs rounded border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10"
+                            hx-post="/settings/users/{{ u.id }}/enable" hx-swap="none">Enable</button>
+                  {% else %}
+                    <button class="px-2 py-1 text-xs rounded border border-rose-500/40 text-rose-300 hover:bg-rose-500/10"
+                            hx-post="/settings/users/{{ u.id }}/disable" hx-swap="none">Disable</button>
+                  {% endif %}
                   <button class="px-2 py-1 text-xs rounded border border-rose-500/40 text-rose-300 hover:bg-rose-500/10"
-                          hx-post="/settings/users/{{ u.id }}/disable" hx-swap="none">Disable</button>
-                {% endif %}
+                          hx-post="/settings/users/{{ u.id }}/delete" hx-swap="none"
+                          hx-confirm="Delete user {{ u.username }}? This cannot be undone.">Delete</button>
+                </div>
               {% else %}
                 <span class="text-xs text-slate-500">(you)</span>
               {% endif %}

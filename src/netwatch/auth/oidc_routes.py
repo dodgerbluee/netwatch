@@ -180,14 +180,22 @@ def build_router(*, settings: Settings, templates: Jinja2Templates) -> APIRouter
                     select(User).where(User.email == identity.email)
                 )
                 user = res.scalar_one_or_none()
-                if user is not None:
-                    user.oidc_provider = provider_name
-                    user.oidc_subject = identity.subject
-                    # Don't downgrade their source — stay LOCAL if they had a password.
-                    if not user.password_hash:
-                        user.source = UserSource.OIDC
 
-            # 3. Auto-register if allowed.
+            # 3. Try to link by username.
+            if user is None and identity.username:
+                res = await s.execute(
+                    select(User).where(User.username == identity.username)
+                )
+                user = res.scalar_one_or_none()
+
+            # If we matched an existing user (step 2 or 3), link the OIDC identity.
+            if user is not None and not user.oidc_subject:
+                user.oidc_provider = provider_name
+                user.oidc_subject = identity.subject
+                if not user.password_hash:
+                    user.source = UserSource.OIDC
+
+            # 4. Auto-register if allowed.
             if user is None:
                 if not prov.auto_register:
                     return RedirectResponse(

@@ -319,6 +319,29 @@ def build_router(*, settings: Settings, templates: Jinja2Templates) -> APIRouter
             '<script>setTimeout(() => location.reload(), 800)</script>'
         )
 
+    @router.post("/settings/users/{user_id}/delete", response_class=HTMLResponse)
+    async def delete_user(
+        user_id: int,
+        admin: Annotated[User, Depends(current_user)],
+    ) -> HTMLResponse:
+        if not admin.is_admin:
+            raise HTTPException(403)
+        if admin.id == user_id:
+            return HTMLResponse(
+                '<span class="text-rose-300 text-xs">Refusing to delete yourself.</span>',
+                status_code=400,
+            )
+        async with session_scope() as s:
+            u = await s.get(User, user_id)
+            if u is None:
+                raise HTTPException(404)
+            await revoke_all_for_user(s, user_id)
+            await s.delete(u)
+        return HTMLResponse(
+            '<span class="text-emerald-300 text-xs">User deleted.</span>'
+            '<script>setTimeout(() => location.reload(), 800)</script>'
+        )
+
     @router.post("/settings/sessions/purge", response_class=HTMLResponse)
     async def purge_sessions(
         admin: Annotated[User, Depends(current_user)],
