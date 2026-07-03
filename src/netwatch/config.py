@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -27,13 +27,14 @@ class BootSettings(BaseSettings):
         env_prefix="NETWATCH_",
         env_file=".env",
         env_file_encoding="utf-8",
+        env_ignore_empty=True,
         extra="ignore",
     )
 
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(default="INFO")
     http_host: str = Field(default="0.0.0.0")  # noqa: S104
     http_port: int = Field(default=8099, ge=1, le=65535)
-    data_dir: Path = Field(default=Path("/data"))
+    data_dir: Annotated[Path, Field(default=Path("/data"))]
 
     @property
     def db_path(self) -> Path:

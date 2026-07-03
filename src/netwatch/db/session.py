@@ -31,11 +31,14 @@ async def init_db(settings: Settings) -> None:
 
     global _engine, _session_factory
 
-    settings.data_dir.mkdir(parents=True, exist_ok=True)
-    log.info("db.open", path=str(settings.db_path))
+    data_dir = settings.data_dir
+    db_path = settings.db_path
+    db_url = settings.db_url
+    data_dir.mkdir(parents=True, exist_ok=True)
+    log.info("db.open", data_dir=str(data_dir), path=str(db_path), url=db_url)
 
     _engine = create_async_engine(
-        settings.db_url,
+        db_url,
         echo=False,
         connect_args={"timeout": 30},
         pool_pre_ping=True,
