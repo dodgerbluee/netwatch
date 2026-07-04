@@ -229,9 +229,7 @@ def build_router(*, settings: Settings, templates: Jinja2Templates) -> APIRouter
             if user.is_disabled:
                 return RedirectResponse("/login?error=user_disabled", status_code=303)
 
-            # Keep claims fresh.
-            if identity.display_name and identity.display_name != user.display_name:
-                user.display_name = identity.display_name
+            # Keep email fresh from OIDC; display_name is user-editable so don't overwrite.
             if identity.email and identity.email != user.email:
                 user.email = identity.email
 
