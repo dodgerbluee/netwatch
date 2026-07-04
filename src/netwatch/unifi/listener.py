@@ -54,10 +54,9 @@ async def run_unifi_listener(settings: Settings) -> None:
         log.warning("unifi.alias_sync.bootstrap_failed", error=repr(exc))
 
     async with UnifiClient(settings.unifi) as unifi:
-        # Concurrent: WS stream + periodic reconcile + daily alias resync.
         await asyncio.gather(
             _ws_loop(unifi, engine, bootstrap_until),
-            _reconcile_loop(unifi, engine, bootstrap_until, interval=60),
+            _reconcile_loop(settings, bootstrap_until, interval=60),
             _alias_resync_loop(settings, interval_seconds=86400),
         )
 
@@ -124,16 +123,20 @@ async def _ws_loop(
 
 
 async def _reconcile_loop(
-    unifi: UnifiClient,
-    engine: PolicyEngine,
+    settings: Settings,
     bootstrap_until: float,
     *,
     interval: int,
 ) -> None:
+    from sqlalchemy import select
+
+    from netwatch.db.models import Device
+
     while True:
         await asyncio.sleep(interval)
         try:
-            clients = await unifi.list_active_clients()
+            async with UnifiClient(settings.unifi) as unifi:
+                clients = await unifi.list_active_clients()
         except Exception as exc:  # noqa: BLE001
             log.warning("unifi.reconcile.failed", error=repr(exc))
             continue
@@ -144,12 +147,6 @@ async def _reconcile_loop(
             if not mac:
                 continue
             seen_macs.add(mac)
-
-        # Mark anything not in the active list as offline. Don't generate
-        # disconnect events — just keep state consistent.
-        from sqlalchemy import select
-
-        from netwatch.db.models import Device
 
         async with session_scope() as session:
             res = await session.execute(
@@ -186,18 +183,17 @@ async def _handle_event(
     structlog.contextvars.bind_contextvars(mac=evt.mac, ssid=evt.ssid, event=str(evt.event))
     try:
         async with session_scope() as session:
-            await record_sighting(
-                session,
-                mac=evt.mac,
-                event=evt.event,
-                ssid=evt.ssid,
-                ip=evt.ip,
-                ap_mac=evt.ap_mac,
-                rssi=evt.rssi,
-                raw=evt.raw,
-            )
-
             if evt.event == SightingEvent.DISCONNECTED:
+                await record_sighting(
+                    session,
+                    mac=evt.mac,
+                    event=evt.event,
+                    ssid=evt.ssid,
+                    ip=evt.ip,
+                    ap_mac=evt.ap_mac,
+                    rssi=evt.rssi,
+                    raw=evt.raw,
+                )
                 await mark_offline(session, evt.mac)
                 return
 
@@ -209,6 +205,17 @@ async def _handle_event(
                 ap_mac=evt.ap_mac,
                 hostname=evt.hostname,
                 oui=evt.oui,
+            )
+
+            await record_sighting(
+                session,
+                mac=evt.mac,
+                event=evt.event,
+                ssid=evt.ssid,
+                ip=evt.ip,
+                ap_mac=evt.ap_mac,
+                rssi=evt.rssi,
+                raw=evt.raw,
             )
 
         # Policy evaluation happens outside the DB scope to avoid holding the
