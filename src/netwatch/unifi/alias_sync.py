@@ -87,10 +87,26 @@ async def full_sync(settings: Settings) -> SyncResult:
 
         # 3. Sync blocked status (bidirectional)
         # Pull: UniFi blocked -> netwatch blocked
+        existing_macs = {d.mac for d in all_devices}
         for device in all_devices:
             if device.mac in blocked_macs and device.status != DeviceStatus.BLOCKED:
                 device.status = DeviceStatus.BLOCKED
                 result.blocked_synced += 1
+
+        # Create device rows for blocked clients not yet in DB
+        known_by_mac = {(u.get("mac") or "").lower(): u for u in known_clients}
+        for mac in blocked_macs - existing_macs:
+            u = known_by_mac.get(mac, {})
+            device = Device(
+                mac=mac,
+                name=(u.get("name") or "").strip() or mac,
+                hostname=(u.get("hostname") or "").strip(),
+                oui=(u.get("oui") or "").strip(),
+                status=DeviceStatus.BLOCKED,
+                is_online=False,
+            )
+            session.add(device)
+            result.blocked_synced += 1
 
     # Push: netwatch blocked -> UniFi blocked
     async with session_scope() as session:
