@@ -316,7 +316,7 @@
               {% endif %}
             </td>
             <td class="px-3 py-2 text-slate-400 text-xs">
-              {{ u.last_login_at.strftime("%Y-%m-%d %H:%M") if u.last_login_at else "—" }}
+              {{ u.last_login_at | localtime }}
             </td>
             <td class="px-3 py-2 text-right">
               {% if u.id != me.id %}

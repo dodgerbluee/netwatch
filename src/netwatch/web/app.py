@@ -136,6 +136,12 @@ def _install_auth_middleware(app: FastAPI, settings: Settings) -> None:
         return JSONResponse({"error": "login required"}, status_code=401)
 
 
+def _localtime_filter(dt: datetime | None, fmt: str = "%Y-%m-%d %H:%M") -> str:
+    if dt is None:
+        return "—"
+    return dt.astimezone().strftime(fmt)
+
+
 def create_app(
     *,
     settings: Settings,
@@ -151,6 +157,7 @@ def create_app(
     app.state.settings = settings
 
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+    templates.env.filters["localtime"] = _localtime_filter
     app.state.templates = templates
 
     if STATIC_DIR.exists():
