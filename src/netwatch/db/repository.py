@@ -202,7 +202,14 @@ async def recent_sightings(
     since: timedelta | None = None,
     limit: int = 200,
 ) -> list[Sighting]:
-    stmt = select(Sighting).order_by(Sighting.observed_at.desc()).limit(limit)
+    from sqlalchemy.orm import selectinload
+
+    stmt = (
+        select(Sighting)
+        .options(selectinload(Sighting.device))
+        .order_by(Sighting.observed_at.desc())
+        .limit(limit)
+    )
     if mac is not None:
         stmt = stmt.where(Sighting.mac == mac.lower())
     if since is not None:
