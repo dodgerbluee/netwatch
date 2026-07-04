@@ -28,7 +28,10 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     NETWATCH_DATA_DIR=/data
 
-RUN mkdir -p /data /app
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends tzdata \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /data /app
 
 WORKDIR /app
 
