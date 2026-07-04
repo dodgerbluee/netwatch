@@ -39,7 +39,7 @@
 
         <button
           class="px-2 py-1 rounded-md border border-slate-700 text-slate-300 hover:border-amber-500/40 hover:text-amber-300 text-xs"
-          onclick="document.getElementById('import-modal').classList.remove('hidden')"
+          onclick="let m=document.getElementById('import-modal');m.classList.remove('hidden');m.style.display=''"
           title="Replace the database from a snapshot file"
         >Import</button>
 
@@ -58,7 +58,7 @@
   </nav>
 
   <!-- Import modal -->
-  <div id="import-modal" class="hidden fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+  <div id="import-modal" class="hidden fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" style="display:none">
     <div class="bg-slate-900 border border-slate-700 rounded-lg max-w-md w-full p-6 space-y-4">
       <h2 class="text-lg font-bold">Import database</h2>
       <p class="text-sm text-slate-300">
@@ -85,7 +85,7 @@
         <div class="flex justify-end gap-2">
           <button type="button"
                   class="px-3 py-1.5 rounded-md border border-slate-700 text-slate-300 hover:border-slate-500 text-sm"
-                  onclick="document.getElementById('import-modal').classList.add('hidden')">
+                  onclick="let m=document.getElementById('import-modal');m.classList.add('hidden');m.style.display='none'">
             Cancel
           </button>
           <button type="submit"

@@ -13,12 +13,20 @@ from typing import Any
 import structlog
 
 
+_configured = False
+
+
 def configure_logging(level: str = "INFO") -> None:
     """Configure structlog + stdlib logging in one place.
 
-    Output is JSON in containers (machine-parseable) and pretty when stderr
-    is a tty (local dev).
+    Output is key=value in containers and pretty-printed when stderr is a tty.
+    Guarded to run only once even if called multiple times.
     """
+
+    global _configured  # noqa: PLW0603
+    if _configured:
+        return
+    _configured = True
 
     timestamper = structlog.processors.TimeStamper(fmt="iso", utc=True)
 
@@ -34,7 +42,7 @@ def configure_logging(level: str = "INFO") -> None:
     if sys.stderr.isatty():
         renderer: Any = structlog.dev.ConsoleRenderer()
     else:
-        renderer = structlog.processors.JSONRenderer()
+        renderer = structlog.dev.ConsoleRenderer(colors=False)
 
     structlog.configure(
         processors=[*shared_processors, renderer],
@@ -42,16 +50,17 @@ def configure_logging(level: str = "INFO") -> None:
             getattr(logging, level.upper(), logging.INFO)
         ),
         context_class=dict,
-        logger_factory=structlog.stdlib.LoggerFactory(),
+        logger_factory=structlog.PrintLoggerFactory(),
         cache_logger_on_first_use=True,
     )
 
-    # Route stdlib logs (uvicorn, sqlalchemy) through structlog too.
-    logging.basicConfig(
-        format="%(message)s",
-        stream=sys.stderr,
-        level=getattr(logging, level.upper(), logging.INFO),
-    )
+    # Route stdlib logs (uvicorn, sqlalchemy) to stderr with minimal format.
+    root = logging.getLogger()
+    root.handlers.clear()
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    root.addHandler(handler)
+    root.setLevel(getattr(logging, level.upper(), logging.INFO))
 
     # Quiet down chatty libs.
     for noisy in ("uvicorn.access", "sqlalchemy.engine.Engine", "httpx", "httpcore"):
