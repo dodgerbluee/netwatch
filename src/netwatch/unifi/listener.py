@@ -56,7 +56,7 @@ async def run_unifi_listener(settings: Settings) -> None:
     async with UnifiClient(settings.unifi) as unifi:
         await asyncio.gather(
             _ws_loop(unifi, engine, bootstrap_until),
-            _reconcile_loop(settings, bootstrap_until, interval=60),
+            _reconcile_loop(unifi, bootstrap_until, interval=60),
             _alias_resync_loop(settings, interval_seconds=86400),
         )
 
@@ -123,7 +123,7 @@ async def _ws_loop(
 
 
 async def _reconcile_loop(
-    settings: Settings,
+    unifi: UnifiClient,
     bootstrap_until: float,
     *,
     interval: int,
@@ -135,8 +135,7 @@ async def _reconcile_loop(
     while True:
         await asyncio.sleep(interval)
         try:
-            async with UnifiClient(settings.unifi) as unifi:
-                clients = await unifi.list_active_clients()
+            clients = await unifi.list_active_clients()
         except Exception as exc:  # noqa: BLE001
             log.warning("unifi.reconcile.failed", error=repr(exc))
             continue
