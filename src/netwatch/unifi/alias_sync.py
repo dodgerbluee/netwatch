@@ -86,14 +86,12 @@ async def full_sync(settings: Settings) -> SyncResult:
                     result.offline_marked += 1
 
         # 3. Sync blocked status (bidirectional)
-        # Pull: UniFi blocked -> netwatch blocked (only for unapproved devices;
-        # never override a manual approve/flag decision)
+        # Pull: UniFi blocked -> netwatch blocked.
+        # UniFi is the authority — if a device is blocked there, the app
+        # reflects it. (Approve unblocks at UniFi, so no false conflicts.)
         existing_macs = {d.mac for d in all_devices}
         for device in all_devices:
-            if (
-                device.mac in blocked_macs
-                and device.status == DeviceStatus.UNAPPROVED
-            ):
+            if device.mac in blocked_macs and device.status != DeviceStatus.BLOCKED:
                 device.status = DeviceStatus.BLOCKED
                 result.blocked_synced += 1
 
