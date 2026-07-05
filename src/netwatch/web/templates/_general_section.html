@@ -4,13 +4,10 @@
         hx-post="/settings/config/general"
         hx-target="#general-section"
         hx-swap="outerHTML">
-    <label class="block text-sm">
-      <span class="text-slate-400">Auto-block enforcement</span>
-      <select name="enforcement_enabled"
-              class="ml-2 bg-slate-950 border border-slate-700 rounded px-2 py-1">
-        <option value="off" {{ '' if settings.enforcement_enabled else 'selected' }}>Off</option>
-        <option value="on" {{ 'selected' if settings.enforcement_enabled else '' }}>On</option>
-      </select>
+    <label class="inline-flex items-center gap-2">
+      <input type="checkbox" name="enforcement_enabled" value="on"
+             {{ 'checked' if settings.enforcement_enabled else '' }} />
+      <span>Enable auto-block enforcement</span>
     </label>
     <p class="text-xs text-slate-500">
       When off, netwatch monitors and alerts but never blocks devices at UniFi.

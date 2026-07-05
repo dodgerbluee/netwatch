@@ -379,9 +379,22 @@ def build_router(*, settings: Settings, templates: Jinja2Templates) -> APIRouter
         if not admin.is_admin:
             raise HTTPException(403)
         enabled = enforcement_enabled.lower() == "on"
+        log.info(
+            "settings.general.save",
+            form_value=enforcement_enabled,
+            parsed=enabled,
+            before=settings.enforcement_enabled,
+        )
         await settings.save_section("general", {
             "enforcement_enabled": enabled,
         })
+        from netwatch.db.config_store import get_config
+        db_check = await get_config("general")
+        log.info(
+            "settings.general.after_save",
+            settings_value=settings.enforcement_enabled,
+            db_value=db_check,
+        )
         return templates.TemplateResponse(
             request,
             "_general_section.html",
