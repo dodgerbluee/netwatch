@@ -238,16 +238,7 @@ class Settings:
         if "opnsense" in cfg:
             self.opnsense = OPNsenseConfig.from_dict(cfg["opnsense"])
         if "general" in cfg:
-            raw = cfg["general"].get("enforcement_enabled", False)
-            self.enforcement_enabled = bool(raw)
-            import structlog
-            structlog.get_logger().info(
-                "config.load_from_db.general",
-                raw_value=raw,
-                raw_type=type(raw).__name__,
-                final=self.enforcement_enabled,
-                sections=list(cfg.keys()),
-            )
+            self.enforcement_enabled = bool(cfg["general"].get("enforcement_enabled", False))
         if "auth" in cfg:
             secret = self.auth.cookie_secret
             self.auth = AuthConfig.from_dict(cfg["auth"])
