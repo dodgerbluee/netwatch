@@ -282,6 +282,21 @@ def _register_routes(app: FastAPI) -> None:
                 log.warning("ui.rename.unifi_failed", mac=mac, error=repr(exc))
         return await _device_row(request, mac, templates)
 
+    @app.post("/devices/{mac}/unapprove", response_class=HTMLResponse)
+    async def unapprove(mac: str, request: Request) -> HTMLResponse:
+        async with session_scope() as session:
+            await session.execute(
+                update(Device)
+                .where(Device.mac == mac.lower())
+                .values(
+                    status=DeviceStatus.UNAPPROVED,
+                    kind=DeviceKind.UNKNOWN,
+                    owner="",
+                    allowed_ssids=[],
+                )
+            )
+        return await _device_row(request, mac, templates)
+
     @app.post("/devices/{mac}/flag", response_class=HTMLResponse)
     async def flag(mac: str, request: Request) -> HTMLResponse:
         async with session_scope() as session:

@@ -44,6 +44,14 @@
         hx-target="#device-{{ d.mac | replace(':','-') }}"
         hx-swap="outerHTML"
       >Approve</button>
+    {% else %}
+      <button
+        class="px-2 py-1 text-xs rounded-md border border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
+        hx-post="/devices/{{ d.mac }}/unapprove"
+        hx-target="#device-{{ d.mac | replace(':','-') }}"
+        hx-swap="outerHTML"
+        hx-confirm="Mark {{ d.name or d.mac }} as unknown?"
+      >Unapprove</button>
     {% endif %}
     {% if d.status != "flagged" %}
       <button
