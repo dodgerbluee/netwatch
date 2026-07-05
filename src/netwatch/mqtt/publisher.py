@@ -59,13 +59,19 @@ async def run_mqtt_bridge(settings: Settings) -> None:
                     _topic(base, "status"), b"running", qos=1, retain=True
                 )
 
-                # 3. Publish initial counts.
+                # 3. Clear stale retained messages on non-retained topics.
+                for t in ("last_event", "last_event/summary"):
+                    await client.publish(
+                        _topic(base, t), b"", qos=1, retain=True
+                    )
+
+                # 4. Publish initial counts.
                 await _publish_counts(client, base)
 
-                # 4. Subscribe to commands.
+                # 5. Subscribe to commands.
                 await client.subscribe(_topic(base, "cmd/+"), qos=1)
 
-                # 5. Run pub + sub loops concurrently.
+                # 6. Run pub + sub loops concurrently.
                 engine = PolicyEngine(settings)
                 await asyncio.gather(
                     _decision_loop(client, base),
