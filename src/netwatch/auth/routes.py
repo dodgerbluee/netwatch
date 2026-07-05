@@ -370,23 +370,19 @@ def build_router(*, settings: Settings, templates: Jinja2Templates) -> APIRouter
 
     # ----- Config save endpoints ----------------------------------------
 
-    @router.post("/settings/config/general", response_class=HTMLResponse)
+    @router.post("/settings/config/general")
     async def save_general(
         request: Request,
         admin: Annotated[User, Depends(current_user)],
         enforcement_enabled: Annotated[str, Form()] = "off",
-    ) -> HTMLResponse:
+    ):
         if not admin.is_admin:
             raise HTTPException(403)
         enabled = enforcement_enabled.lower() == "on"
         await settings.save_section("general", {
             "enforcement_enabled": enabled,
         })
-        return templates.TemplateResponse(
-            request,
-            "_general_section.html",
-            {"settings": settings, "me": admin, "general_msg": "Settings saved."},
-        )
+        return RedirectResponse("/settings", status_code=303)
 
     @router.post("/settings/config/unifi", response_class=HTMLResponse)
     async def save_unifi(

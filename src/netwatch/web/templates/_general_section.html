@@ -1,9 +1,6 @@
 <section id="general-section" class="rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-3">
   <h2 class="font-semibold">General</h2>
-  <form class="space-y-2 text-sm"
-        hx-post="/settings/config/general"
-        hx-target="#general-section"
-        hx-swap="outerHTML">
+  <form method="post" action="/settings/config/general" class="space-y-2 text-sm">
     <label class="inline-flex items-center gap-2">
       <input type="checkbox" name="enforcement_enabled" value="on"
              {{ 'checked' if settings.enforcement_enabled else '' }} />
@@ -12,9 +9,6 @@
     <p class="text-xs text-slate-500">
       When off, netwatch monitors and alerts but never blocks devices at UniFi.
     </p>
-    <div id="general-status" class="text-xs">
-      {% if general_msg %}<span class="text-emerald-300">{{ general_msg }}</span>{% endif %}
-    </div>
     <button class="px-3 py-1.5 rounded-md border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 text-sm">
       Save
     </button>
