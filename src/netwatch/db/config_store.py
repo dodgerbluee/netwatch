@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.orm.attributes import flag_modified
 
 from netwatch.db.models import AppConfig
 from netwatch.db.session import session_scope
@@ -28,6 +29,7 @@ async def set_config(key: str, value: dict[str, Any]) -> None:
             s.add(row)
         else:
             row.value = value
+            flag_modified(row, "value")
 
 
 async def get_all_config() -> dict[str, dict[str, Any]]:
