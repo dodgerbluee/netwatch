@@ -138,6 +138,19 @@ async def _publish_discovery(
             ),
         )
     )
+    entities.append(
+        (
+            f"{discovery}/sensor/netwatch/last_blocked/config",
+            sensor(
+                unique_id="netwatch_last_blocked",
+                name="Netwatch Last Blocked",
+                state_topic=_topic(base, "event/blocked/summary"),
+                json_attributes_topic=_topic(base, "event/blocked"),
+                icon="mdi:shield-off",
+                base_url=base_url,
+            ),
+        )
+    )
 
     for topic, payload in entities:
         await client.publish(
@@ -186,6 +199,30 @@ async def _decision_loop(client: aiomqtt.Client, base: str) -> None:
         await client.publish(
             _topic(base, "alert"), alert_state.encode(), qos=1, retain=True
         )
+
+        # Dedicated blocked event — only fires on first-time blocks.
+        if de.first_block:
+            device_label = de.device_name or de.event.hostname or de.event.mac
+            blocked_payload = {
+                "mac": de.event.mac,
+                "name": device_label,
+                "ssid": de.event.ssid,
+                "ip": de.event.ip,
+                "reason": de.decision.reason,
+                "observed_at": de.event.observed_at.isoformat(),
+            }
+            await client.publish(
+                _topic(base, "event/blocked"),
+                json.dumps(blocked_payload).encode(),
+                qos=1,
+                retain=False,
+            )
+            await client.publish(
+                _topic(base, "event/blocked/summary"),
+                f"Blocked: {device_label} on {de.event.ssid or '?'}".encode(),
+                qos=1,
+                retain=False,
+            )
 
 
 async def _periodic_counts_loop(client: aiomqtt.Client, base: str) -> None:

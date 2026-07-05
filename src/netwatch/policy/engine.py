@@ -56,6 +56,9 @@ class PolicyEngine:
                 log.warning("policy.no_device", mac=event.mac)
                 return None
 
+            device_name = device.name or ""
+            was_blocked = device.status == DeviceStatus.BLOCKED
+
             decision = decide(
                 device=device,
                 policy=policy,
@@ -76,6 +79,7 @@ class PolicyEngine:
         )
 
         # --- side effects -------------------------------------------------
+        first_block = False
         if decision.should_block:
             blocked = await self._block(event)
             async with session_scope() as session:
@@ -90,6 +94,7 @@ class PolicyEngine:
                 )
                 if blocked:
                     await set_status(session, event.mac, DeviceStatus.BLOCKED)
+                    first_block = not was_blocked
         else:
             async with session_scope() as session:
                 await record_action(
@@ -102,7 +107,12 @@ class PolicyEngine:
                     context={"verdict": str(decision.verdict)},
                 )
 
-        await publish_decision(event=event, decision=decision)
+        await publish_decision(
+            event=event,
+            decision=decision,
+            device_name=device_name,
+            first_block=first_block,
+        )
         return decision
 
     async def _block(self, event: NetworkEvent) -> bool:
