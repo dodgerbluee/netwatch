@@ -13,4 +13,31 @@
       Save
     </button>
   </form>
+
+  <div class="pt-3 border-t border-slate-800 space-y-2">
+    <h3 class="text-sm font-medium text-slate-300">Debug API key</h3>
+    <p class="text-xs text-slate-500">
+      Generate a key to access <code class="text-xs">/api/debug?key=…</code> for
+      remote troubleshooting. Accepts <code>?mac=</code> and <code>?limit=</code> filters.
+    </p>
+    {% if settings.api_key %}
+      <div class="flex items-center gap-2 flex-wrap">
+        <code class="text-xs font-mono bg-slate-950 px-2 py-1 rounded break-all">{{ settings.api_key }}</code>
+        <button
+          class="px-2 py-1 text-xs rounded border border-rose-500/40 text-rose-300 hover:bg-rose-500/10"
+          hx-delete="/settings/config/general/api-key"
+          hx-target="#api-key-status"
+          hx-swap="innerHTML"
+        >Revoke</button>
+      </div>
+    {% else %}
+      <button
+        class="px-2 py-1 text-xs rounded border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10"
+        hx-post="/settings/config/general/api-key"
+        hx-target="#api-key-status"
+        hx-swap="innerHTML"
+      >Generate key</button>
+    {% endif %}
+    <div id="api-key-status" class="text-xs"></div>
+  </div>
 </section>

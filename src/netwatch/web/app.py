@@ -69,6 +69,7 @@ PUBLIC_PATHS = {
     "/auth/oidc/providers",
     "/auth/oidc/login",
     "/auth/oidc/callback",
+    "/api/debug",
 }
 PUBLIC_PREFIXES = ("/static/",)
 
@@ -262,6 +263,13 @@ def _register_routes(app: FastAPI) -> None:
                 allowed_ssids=ssids,
                 name=name or None,
             )
+        if settings.unifi.configured:
+            from netwatch.unifi.client import UnifiClient
+            try:
+                async with UnifiClient(settings.unifi) as unifi:
+                    await unifi.unblock_client(mac)
+            except Exception:  # noqa: BLE001
+                pass
         return await _device_row(request, mac, templates)
 
     @app.post("/devices/{mac}/rename", response_class=HTMLResponse)
@@ -457,6 +465,112 @@ def _register_routes(app: FastAPI) -> None:
             'imported successfully — refreshing…</span>'
             '<script>setTimeout(() => location.reload(), 800)</script>'
         )
+
+    # ----- Debug API -------------------------------------------------------
+
+    @app.get("/api/debug", response_class=JSONResponse)
+    async def debug_api(request: Request, key: str = "") -> JSONResponse:
+        from netwatch.db.config_store import get_config
+        from netwatch.db.models import Action, Policy, Sighting
+
+        general_cfg = await get_config("general")
+        stored_key = general_cfg.get("api_key", "")
+        if not stored_key or key != stored_key:
+            raise HTTPException(401, "invalid or missing API key")
+
+        mac_filter = request.query_params.get("mac", "")
+        limit = min(int(request.query_params.get("limit", "100")), 500)
+
+        async with session_scope() as session:
+            from sqlalchemy import select
+            from sqlalchemy.orm import selectinload
+
+            # Recent actions
+            q = select(Action).order_by(Action.created_at.desc()).limit(limit)
+            if mac_filter:
+                q = q.where(Action.mac == mac_filter.lower())
+            actions = (await session.execute(q)).scalars().all()
+
+            # Recent sightings
+            q = (
+                select(Sighting)
+                .options(selectinload(Sighting.device))
+                .order_by(Sighting.observed_at.desc())
+                .limit(limit)
+            )
+            if mac_filter:
+                q = q.where(Sighting.mac == mac_filter.lower())
+            sightings = (await session.execute(q)).scalars().all()
+
+            # All devices
+            q = select(Device).order_by(Device.updated_at.desc())
+            if mac_filter:
+                q = q.where(Device.mac == mac_filter.lower())
+            devices = (await session.execute(q)).scalars().all()
+
+            # Policies
+            policies = (
+                await session.execute(select(Policy).order_by(Policy.ssid))
+            ).scalars().all()
+
+        enforcement = bool(general_cfg.get("enforcement_enabled", False))
+
+        return JSONResponse({
+            "enforcement_enabled": enforcement,
+            "filter": {"mac": mac_filter or None, "limit": limit},
+            "devices": [
+                {
+                    "mac": d.mac,
+                    "name": d.name,
+                    "status": d.status,
+                    "kind": d.kind,
+                    "owner": d.owner,
+                    "allowed_ssids": d.allowed_ssids,
+                    "is_online": d.is_online,
+                    "last_ssid": d.last_ssid,
+                    "last_seen_at": d.last_seen_at.isoformat() if d.last_seen_at else None,
+                    "updated_at": d.updated_at.isoformat() if d.updated_at else None,
+                }
+                for d in devices
+            ],
+            "actions": [
+                {
+                    "id": a.id,
+                    "mac": a.mac,
+                    "ssid": a.ssid,
+                    "kind": a.kind,
+                    "result": a.result,
+                    "reason": a.reason,
+                    "context": a.context,
+                    "created_at": a.created_at.isoformat() if a.created_at else None,
+                }
+                for a in actions
+            ],
+            "sightings": [
+                {
+                    "id": s.id,
+                    "mac": s.mac,
+                    "device_name": s.device.name if s.device else None,
+                    "device_status": s.device.status if s.device else None,
+                    "event": s.event,
+                    "ssid": s.ssid,
+                    "ip": s.ip,
+                    "ap_mac": s.ap_mac,
+                    "rssi": s.rssi,
+                    "observed_at": s.observed_at.isoformat() if s.observed_at else None,
+                }
+                for s in sightings
+            ],
+            "policies": [
+                {
+                    "ssid": p.ssid,
+                    "auto_block_unknown": p.auto_block_unknown,
+                    "allow_kinds": p.allow_kinds,
+                    "allow_owners": p.allow_owners,
+                }
+                for p in policies
+            ],
+        })
 
 
 # ---------------------------------------------------------------------------

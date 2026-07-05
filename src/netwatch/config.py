@@ -197,6 +197,7 @@ class Settings:
     boot: BootSettings = field(default_factory=BootSettings)
 
     enforcement_enabled: bool = False
+    api_key: str = ""
     unifi: UniFiConfig = field(default_factory=UniFiConfig)
     mqtt: MQTTConfig = field(default_factory=MQTTConfig)
     opnsense: OPNsenseConfig = field(default_factory=OPNsenseConfig)
@@ -239,6 +240,7 @@ class Settings:
             self.opnsense = OPNsenseConfig.from_dict(cfg["opnsense"])
         if "general" in cfg:
             self.enforcement_enabled = bool(cfg["general"].get("enforcement_enabled", False))
+            self.api_key = cfg["general"].get("api_key", "")
         if "auth" in cfg:
             secret = self.auth.cookie_secret
             self.auth = AuthConfig.from_dict(cfg["auth"])

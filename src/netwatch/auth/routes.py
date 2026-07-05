@@ -378,11 +378,49 @@ def build_router(*, settings: Settings, templates: Jinja2Templates) -> APIRouter
     ):
         if not admin.is_admin:
             raise HTTPException(403)
-        enabled = enforcement_enabled.lower() == "on"
-        await settings.save_section("general", {
-            "enforcement_enabled": enabled,
-        })
+        from netwatch.db.config_store import get_config
+
+        existing = await get_config("general")
+        existing["enforcement_enabled"] = enforcement_enabled.lower() == "on"
+        await settings.save_section("general", existing)
         return RedirectResponse("/settings", status_code=303)
+
+    @router.post("/settings/config/general/api-key", response_class=HTMLResponse)
+    async def generate_api_key(
+        request: Request,
+        admin: Annotated[User, Depends(current_user)],
+    ) -> HTMLResponse:
+        if not admin.is_admin:
+            raise HTTPException(403)
+        import secrets
+
+        from netwatch.db.config_store import get_config
+
+        new_key = secrets.token_urlsafe(32)
+        existing = await get_config("general")
+        existing["api_key"] = new_key
+        await settings.save_section("general", existing)
+        return HTMLResponse(
+            f'<span class="text-emerald-300 text-xs">Key generated.</span>'
+            f'<code class="ml-2 text-xs font-mono bg-slate-950 px-2 py-1 rounded">'
+            f'{new_key}</code>'
+        )
+
+    @router.delete("/settings/config/general/api-key", response_class=HTMLResponse)
+    async def revoke_api_key(
+        request: Request,
+        admin: Annotated[User, Depends(current_user)],
+    ) -> HTMLResponse:
+        if not admin.is_admin:
+            raise HTTPException(403)
+        from netwatch.db.config_store import get_config
+
+        existing = await get_config("general")
+        existing.pop("api_key", None)
+        await settings.save_section("general", existing)
+        return HTMLResponse(
+            '<span class="text-emerald-300 text-xs">API key revoked.</span>'
+        )
 
     @router.post("/settings/config/unifi", response_class=HTMLResponse)
     async def save_unifi(

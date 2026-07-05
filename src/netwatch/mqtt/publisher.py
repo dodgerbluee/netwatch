@@ -235,7 +235,6 @@ async def _command_loop(
         if verb == "unblock":
             await engine.unblock(mac)
         elif verb == "approve":
-            # Mark the device known with the supplied owner/kind/SSIDs.
             from netwatch.db.models import DeviceKind
             from netwatch.db.repository import set_known
 
@@ -248,6 +247,10 @@ async def _command_loop(
                     allowed_ssids=list(payload.get("allowed_ssids", [])),
                     name=payload.get("name"),
                 )
+            try:
+                await engine.unblock(mac)
+            except Exception:  # noqa: BLE001
+                pass
         elif verb == "flag":
             await _set_flagged(mac)
         else:
