@@ -44,11 +44,15 @@ class PolicyEngine:
     ) -> Decision | None:
         """Evaluate a single event and dispatch any required side effects."""
 
+        from netwatch.db.config_store import get_config
+
+        general_cfg = await get_config("general")
+        enforcement = bool(general_cfg.get("enforcement_enabled", False))
+
         async with session_scope() as session:
             device = await get_device(session, event.mac)
             policy = await get_policy(session, event.ssid) if event.ssid else None
             if device is None:
-                # Shouldn't happen; listener upserts before calling us.
                 log.warning("policy.no_device", mac=event.mac)
                 return None
 
@@ -56,7 +60,7 @@ class PolicyEngine:
                 device=device,
                 policy=policy,
                 event=event,
-                enforcement_enabled=self._settings.enforcement_enabled,
+                enforcement_enabled=enforcement,
             )
 
         # Short-circuit allow.

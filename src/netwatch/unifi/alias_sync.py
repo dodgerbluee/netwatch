@@ -108,23 +108,24 @@ async def full_sync(settings: Settings) -> SyncResult:
             session.add(device)
             result.blocked_synced += 1
 
-    # Push: netwatch blocked -> UniFi blocked
-    async with session_scope() as session:
-        from sqlalchemy import select
-        res = await session.execute(
-            select(Device.mac).where(Device.status == DeviceStatus.BLOCKED)
-        )
-        netwatch_blocked = {row[0] for row in res.all()}
+    # Push: netwatch blocked -> UniFi blocked (only when enforcement is on)
+    if settings.enforcement_enabled:
+        async with session_scope() as session:
+            from sqlalchemy import select
+            res = await session.execute(
+                select(Device.mac).where(Device.status == DeviceStatus.BLOCKED)
+            )
+            netwatch_blocked = {row[0] for row in res.all()}
 
-    to_block_in_unifi = netwatch_blocked - blocked_macs
-    if to_block_in_unifi:
-        async with UnifiClient(settings.unifi) as unifi:
-            for mac in to_block_in_unifi:
-                try:
-                    await unifi.block_client(mac)
-                    result.blocked_synced += 1
-                except Exception as exc:  # noqa: BLE001
-                    log.warning("unifi.sync.block_push_failed", mac=mac, error=repr(exc))
+        to_block_in_unifi = netwatch_blocked - blocked_macs
+        if to_block_in_unifi:
+            async with UnifiClient(settings.unifi) as unifi:
+                for mac in to_block_in_unifi:
+                    try:
+                        await unifi.block_client(mac)
+                        result.blocked_synced += 1
+                    except Exception as exc:  # noqa: BLE001
+                        log.warning("unifi.sync.block_push_failed", mac=mac, error=repr(exc))
 
     log.info(
         "unifi.full_sync.done",
