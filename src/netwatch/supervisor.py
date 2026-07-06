@@ -65,6 +65,7 @@ class Supervisor:
 
     async def start(self) -> None:
         from netwatch.mqtt.publisher import run_mqtt_bridge
+        from netwatch.opnsense.poller import run_opnsense_poller
         from netwatch.unifi.listener import run_unifi_listener
 
         self.register(
@@ -76,6 +77,11 @@ class Supervisor:
             "mqtt-bridge",
             run_mqtt_bridge,
             config_guard=lambda s: s.mqtt.configured,
+        )
+        self.register(
+            "opnsense-poller",
+            run_opnsense_poller,
+            config_guard=lambda s: s.opnsense.enabled,
         )
         self.register("oidc-state-purge", _run_oidc_state_purge)
 

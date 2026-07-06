@@ -1,24 +1,18 @@
-"""OPNsense API client — phase 2.
+"""OPNsense API client.
 
-This module is stubbed intentionally; it's wired up so the rest of the
-codebase compiles, but it doesn't do anything until you enable it.
+Uses API key + secret authentication to poll:
+  - ARP table (currently reachable L2 neighbours → wired devices)
+  - DHCP leases (historical + active → hostname + lease metadata)
 
-Implementation plan when you're ready:
-  1. Use API key + secret (`OPNsense -> System -> Access -> Users -> +API key`).
-  2. Endpoints we'll need:
-       GET  /api/firewall/alias/get
-       POST /api/firewall/alias/setItem/<uuid>
-       POST /api/firewall/alias/reconfigure
-     Maintain two MAC aliases (`netwatch_allowed_macs`, `netwatch_blocked_macs`)
-     and rebuild them from the netwatch DB on every change.
-  3. Trigger: a new asyncio task subscribes to the in-process bus (same
-     pattern as mqtt.publisher) and queues a sync after N seconds of
-     quiet (debounce).
-  4. Optional: feed a separate alias for "kids devices" so OPNsense can
-     enforce per-MAC schedules independent of WiFi.
+Only tracks ethernet/wired devices — anything also seen on Wi-Fi
+via UniFi is ignored so there's a single source of truth per MAC.
 """
 
 from __future__ import annotations
+
+from typing import Any
+
+import httpx
 
 from netwatch.config import OPNsenseConfig
 from netwatch.logging import get_logger
@@ -27,15 +21,47 @@ log = get_logger(__name__)
 
 
 class OPNsenseClient:
-    """Stub. Methods raise NotImplementedError until wired up."""
-
     def __init__(self, settings: OPNsenseConfig) -> None:
         self._settings = settings
+        self._client: httpx.AsyncClient | None = None
 
-    async def sync_macs(
-        self, *, allowed: list[str], blocked: list[str]
-    ) -> None:  # pragma: no cover
-        if not self._settings.enabled:
-            log.debug("opnsense.disabled")
-            return
-        raise NotImplementedError("OPNsense sync is phase 2; see TODO in module docstring")
+    async def __aenter__(self) -> OPNsenseClient:
+        self._client = httpx.AsyncClient(
+            base_url=self._settings.host,
+            verify=self._settings.verify_tls,
+            timeout=httpx.Timeout(15.0, connect=5.0),
+            auth=(self._settings.api_key, self._settings.api_secret),
+            follow_redirects=True,
+        )
+        return self
+
+    async def __aexit__(self, *_: object) -> None:
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
+
+    async def get_arp_table(self) -> list[dict[str, Any]]:
+        """Return ARP entries from diagnostics/interface."""
+        assert self._client is not None
+        resp = await self._client.get("/api/diagnostics/interface/getArp")
+        resp.raise_for_status()
+        data = resp.json()
+        return list(data.get("rows", []))
+
+    async def get_dhcp_leases(self) -> list[dict[str, Any]]:
+        """Return all DHCPv4 leases (active + expired)."""
+        assert self._client is not None
+        # ISC DHCP / Kea — the searchLeases endpoint returns all.
+        resp = await self._client.get(
+            "/api/dhcpv4/leases/searchLease"
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return list(data.get("rows", []))
+
+    async def get_interfaces(self) -> dict[str, Any]:
+        """Return interface list (to identify LAN vs WAN)."""
+        assert self._client is not None
+        resp = await self._client.get("/api/diagnostics/interface/getInterfaceNames")
+        resp.raise_for_status()
+        return resp.json()

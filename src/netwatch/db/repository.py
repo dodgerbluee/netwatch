@@ -16,6 +16,7 @@ from netwatch.db.models import (
     Action,
     ActionKind,
     ActionResult,
+    ConnectionType,
     Device,
     DeviceKind,
     DeviceStatus,
@@ -61,6 +62,7 @@ async def upsert_device_from_sighting(
     ap_mac: str,
     hostname: str,
     oui: str,
+    connection_type: ConnectionType | None = None,
 ) -> tuple[Device, bool]:
     """Insert-or-update a device row from a fresh sighting.
 
@@ -69,6 +71,7 @@ async def upsert_device_from_sighting(
 
     mac = mac.lower()
     now = datetime.now(UTC)
+    conn = connection_type or (ConnectionType.WIRELESS if ssid else ConnectionType.UNKNOWN)
 
     existing = await session.get(Device, mac)
     if existing is None:
@@ -85,6 +88,7 @@ async def upsert_device_from_sighting(
             last_ap_mac=ap_mac,
             last_seen_at=now,
             first_seen_at=now,
+            connection_type=conn,
             is_online=True,
         )
         session.add(device)
@@ -96,6 +100,8 @@ async def upsert_device_from_sighting(
     existing.last_ap_mac = ap_mac or existing.last_ap_mac
     existing.last_seen_at = now
     existing.is_online = True
+    if conn != ConnectionType.UNKNOWN:
+        existing.connection_type = conn
     if hostname and not existing.hostname:
         existing.hostname = hostname
     if oui and not existing.oui:

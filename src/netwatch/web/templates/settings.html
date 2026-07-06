@@ -157,8 +157,44 @@
   <!-- OPNsense configuration -->
   {% if me.is_admin %}
   <section class="rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-3">
-    <h2 class="font-semibold">OPNsense <span class="text-xs text-slate-500">(optional)</span></h2>
-    <p class="text-sm text-slate-400">OPNsense integration is not yet implemented. Configuration will be available in a future release.</p>
+    <h2 class="font-semibold">OPNsense <span class="text-xs text-slate-500">(wired device tracking)</span></h2>
+    <form class="space-y-2 text-sm"
+          hx-post="/settings/config/opnsense"
+          hx-target="#opnsense-cfg-status"
+          hx-swap="innerHTML">
+      <label class="block">
+        <span class="text-slate-400">Host URL</span>
+        <input type="text" name="host"
+               value="{{ settings.opnsense.host }}"
+               placeholder="https://192.168.1.1"
+               class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 font-mono" />
+      </label>
+      <label class="block">
+        <span class="text-slate-400">API Key</span>
+        <input type="text" name="api_key"
+               value="{{ settings.opnsense.api_key }}"
+               placeholder="System > Access > Users > API keys"
+               class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 font-mono" />
+      </label>
+      <label class="block">
+        <span class="text-slate-400">API Secret</span>
+        <input type="password" name="api_secret"
+               value="{{ '__unchanged__' if settings.opnsense.api_secret else '' }}"
+               class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 font-mono" />
+      </label>
+      <label class="inline-flex items-center gap-2">
+        <input type="checkbox" name="verify_tls"
+               {{ 'checked' if settings.opnsense.verify_tls else '' }} />
+        <span>Verify TLS</span>
+      </label>
+      <div class="flex items-center gap-3 pt-1">
+        <button type="submit"
+                class="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 rounded text-white text-xs font-semibold">
+          Save
+        </button>
+        <span id="opnsense-cfg-status"></span>
+      </div>
+    </form>
   </section>
   {% endif %}
 

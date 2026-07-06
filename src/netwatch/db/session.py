@@ -54,6 +54,7 @@ async def init_db(settings: Settings) -> None:
 
     async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(_add_missing_columns)
 
     _session_factory = async_sessionmaker(_engine, expire_on_commit=False)
 
@@ -71,6 +72,23 @@ async def init_db(settings: Settings) -> None:
     from netwatch.auth.oidc import registry as oidc_registry
 
     await oidc_registry.reload()
+
+
+def _add_missing_columns(conn: object) -> None:
+    """Best-effort schema migration for new columns on existing tables."""
+    import sqlite3
+
+    raw = conn.connection.dbapi_connection  # type: ignore[attr-defined]
+    cursor = raw.cursor()
+    try:
+        cols = {row[1] for row in cursor.execute("PRAGMA table_info(devices)").fetchall()}
+        if "connection_type" not in cols:
+            cursor.execute("ALTER TABLE devices ADD COLUMN connection_type VARCHAR(16) DEFAULT 'unknown'")
+            log.info("db.migrate.added_column", table="devices", column="connection_type")
+    except Exception as exc:  # noqa: BLE001
+        log.warning("db.migrate.failed", error=repr(exc))
+    finally:
+        cursor.close()
 
 
 def get_engine() -> AsyncEngine:

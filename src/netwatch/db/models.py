@@ -59,6 +59,12 @@ class DeviceStatus(StrEnum):
     BLOCKED = "blocked"        # currently blocked at UniFi
 
 
+class ConnectionType(StrEnum):
+    UNKNOWN = "unknown"
+    WIRELESS = "wireless"
+    WIRED = "wired"
+
+
 class SightingEvent(StrEnum):
     CONNECTED = "connected"
     DISCONNECTED = "disconnected"
@@ -110,6 +116,9 @@ class Device(Base):
         DateTime(timezone=True), default=_utcnow
     )
 
+    connection_type: Mapped[ConnectionType] = mapped_column(
+        String(16), default=ConnectionType.UNKNOWN, index=True
+    )
     is_online: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
 
     created_at: Mapped[datetime] = mapped_column(

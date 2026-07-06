@@ -540,6 +540,7 @@ def _register_routes(app: FastAPI) -> None:
                     "kind": d.kind,
                     "owner": d.owner,
                     "allowed_ssids": d.allowed_ssids,
+                    "connection_type": d.connection_type,
                     "is_online": d.is_online,
                     "last_ssid": d.last_ssid,
                     "last_seen_at": d.last_seen_at.isoformat() if d.last_seen_at else None,
