@@ -70,8 +70,6 @@ PUBLIC_PATHS = {
     "/auth/oidc/login",
     "/auth/oidc/callback",
     "/api/debug",
-    "/api/aps",
-    "/api/aps/min-rssi",
 }
 PUBLIC_PREFIXES = ("/static/",)
 
@@ -573,70 +571,6 @@ def _register_routes(app: FastAPI) -> None:
                 for p in policies
             ],
         })
-
-    # ----- AP Management API -----------------------------------------------
-
-    @app.get("/api/aps", response_class=JSONResponse)
-    async def list_aps(request: Request, key: str = "") -> JSONResponse:
-        from netwatch.db.config_store import get_config
-        from netwatch.unifi.client import UnifiClient
-
-        general_cfg = await get_config("general")
-        stored_key = general_cfg.get("api_key", "")
-        if not stored_key or key != stored_key:
-            raise HTTPException(401, "invalid or missing API key")
-
-        if not settings.unifi.configured:
-            raise HTTPException(503, "UniFi not configured")
-
-        async with UnifiClient(settings.unifi) as unifi:
-            devices = await unifi.list_devices()
-
-        aps = [
-            {
-                "id": d.get("_id"),
-                "mac": d.get("mac"),
-                "name": d.get("name", ""),
-                "model": d.get("model", ""),
-                "type": d.get("type", ""),
-                "ip": d.get("ip", ""),
-                "state": d.get("state", 0),
-                "minrssi_na_enabled": d.get("minrssi_na_enabled", False),
-                "minrssi_na": d.get("minrssi_na", 0),
-                "minrssi_ng_enabled": d.get("minrssi_ng_enabled", False),
-                "minrssi_ng": d.get("minrssi_ng", 0),
-                "num_sta": d.get("num_sta", 0),
-            }
-            for d in devices
-            if d.get("type") == "uap"
-        ]
-        return JSONResponse({"aps": aps})
-
-    @app.post("/api/aps/min-rssi", response_class=JSONResponse)
-    async def set_ap_min_rssi(request: Request) -> JSONResponse:
-        from netwatch.db.config_store import get_config
-        from netwatch.unifi.client import UnifiClient
-
-        body = await request.json()
-        key = body.get("key", "")
-        general_cfg = await get_config("general")
-        stored_key = general_cfg.get("api_key", "")
-        if not stored_key or key != stored_key:
-            raise HTTPException(401, "invalid or missing API key")
-
-        device_id = body.get("device_id", "")
-        min_rssi = int(body.get("min_rssi", 0))
-        band = body.get("band", "both")
-
-        if not device_id:
-            raise HTTPException(400, "device_id required")
-        if not 0 <= min_rssi <= 100:
-            raise HTTPException(400, "min_rssi must be 0-100 (0 disables)")
-
-        async with UnifiClient(settings.unifi) as unifi:
-            ok = await unifi.set_ap_min_rssi(device_id, min_rssi, band)
-
-        return JSONResponse({"ok": ok, "device_id": device_id, "min_rssi": min_rssi})
 
 
 # ---------------------------------------------------------------------------
