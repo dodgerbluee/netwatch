@@ -121,6 +121,29 @@ class UnifiClient:
             json={"name": name},
         )
 
+    # ----- REST: AP device management ------------------------------------
+
+    async def list_devices(self) -> list[dict[str, Any]]:
+        """All adopted UniFi devices (APs, switches, gateways)."""
+        data = await self._get(
+            f"/proxy/network/api/s/{self._settings.site}/stat/device"
+        )
+        return list(data.get("data", []))
+
+    async def set_ap_min_rssi(self, device_id: str, min_rssi: int, band: str = "both") -> bool:
+        """Set minimum RSSI on an AP. band: 'both', '2g', '5g'."""
+        overrides: dict[str, Any] = {}
+        if band in ("both", "2g"):
+            overrides["minrssi_na_enabled"] = min_rssi > 0
+            overrides["minrssi_na"] = min_rssi
+        if band in ("both", "5g"):
+            overrides["minrssi_ng_enabled"] = min_rssi > 0
+            overrides["minrssi_ng"] = min_rssi
+        return await self._put(
+            f"/proxy/network/api/s/{self._settings.site}/rest/device/{device_id}",
+            json=overrides,
+        )
+
     # ----- REST: block / unblock ----------------------------------------
 
     async def block_client(self, mac: str) -> bool:
