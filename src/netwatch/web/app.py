@@ -268,7 +268,12 @@ def _register_routes(app: FastAPI) -> None:
             try:
                 async with UnifiClient(settings.unifi) as unifi:
                     await unifi.unblock_client(mac)
-                    await unifi.enforce_ssid_restrictions(mac, ssids)
+                    if ssids:
+                        try:
+                            await unifi.enforce_ssid_restrictions(mac, ssids)
+                        except Exception:  # noqa: BLE001
+                            log.warning("ui.approve.ssid_restrict_failed", mac=mac)
+                            await unifi.block_client(mac)
             except Exception:  # noqa: BLE001
                 pass
         return await _device_row(request, mac, templates)
@@ -309,6 +314,7 @@ def _register_routes(app: FastAPI) -> None:
             try:
                 async with UnifiClient(settings.unifi) as unifi:
                     await unifi.clear_ssid_restrictions(mac)
+                    await unifi.block_client(mac)
             except Exception:  # noqa: BLE001
                 pass
         return await _device_row(request, mac, templates)

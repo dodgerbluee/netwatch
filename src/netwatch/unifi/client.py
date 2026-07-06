@@ -130,14 +130,17 @@ class UnifiClient:
         return list(data.get("data", []))
 
     async def _update_wlan_deny_list(
-        self, wlan_id: str, mac_list: list[str]
+        self, wlan_id: str, mac_list: list[str], current_policy: str
     ) -> bool:
         payload: dict[str, Any] = {"mac_filter_list": mac_list}
         if mac_list:
             payload["mac_filter_enabled"] = True
             payload["mac_filter_policy"] = "deny"
         else:
-            payload["mac_filter_enabled"] = False
+            # Only disable filtering if the policy was 'deny' (set by us).
+            # If it was 'allow' (set manually), leave it alone.
+            if current_policy == "deny":
+                payload["mac_filter_enabled"] = False
         return await self._put(
             f"/proxy/network/api/s/{self._settings.site}/rest/wlanconf/{wlan_id}",
             json=payload,
@@ -149,6 +152,7 @@ class UnifiClient:
         """Add MAC to deny list of every SSID not in allowed_ssids.
 
         If allowed_ssids is empty, remove from all deny lists (no restrictions).
+        Skips WLANs with an existing allow-list policy to avoid overwriting them.
         """
         mac_lower = mac.lower()
         wlans = await self.list_wlans()
@@ -158,16 +162,23 @@ class UnifiClient:
             wlan_id = wlan["_id"]
             wlan_name = (wlan.get("name") or "").lower()
             current_list = list(wlan.get("mac_filter_list") or [])
+            current_policy = wlan.get("mac_filter_policy", "deny")
+            filter_enabled = wlan.get("mac_filter_enabled", False)
+
+            # Don't touch WLANs with a manually-configured allow-list.
+            if filter_enabled and current_policy == "allow":
+                log.debug("unifi.mac_filter.skip_allow_list", ssid=wlan["name"])
+                continue
 
             if allowed_ssids and wlan_name not in allowed_lower:
                 if mac_lower not in current_list:
                     current_list.append(mac_lower)
-                    await self._update_wlan_deny_list(wlan_id, current_list)
+                    await self._update_wlan_deny_list(wlan_id, current_list, current_policy)
                     log.info("unifi.mac_filter.denied", mac=mac, ssid=wlan["name"])
             else:
                 if mac_lower in current_list:
                     current_list.remove(mac_lower)
-                    await self._update_wlan_deny_list(wlan_id, current_list)
+                    await self._update_wlan_deny_list(wlan_id, current_list, current_policy)
                     log.info("unifi.mac_filter.allowed", mac=mac, ssid=wlan["name"])
 
     async def clear_ssid_restrictions(self, mac: str) -> None:

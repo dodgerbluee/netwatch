@@ -295,13 +295,18 @@ async def _command_loop(
                 await engine.unblock(mac)
             except Exception:  # noqa: BLE001
                 pass
-            if settings.unifi.configured:
+            if settings.unifi.configured and ssids:
                 from netwatch.unifi.client import UnifiClient
                 try:
                     async with UnifiClient(settings.unifi) as unifi:
                         await unifi.enforce_ssid_restrictions(mac, ssids)
                 except Exception:  # noqa: BLE001
-                    pass
+                    log.warning("mqtt.approve.ssid_restrict_failed", mac=mac)
+                    try:
+                        async with UnifiClient(settings.unifi) as unifi:
+                            await unifi.block_client(mac)
+                    except Exception:  # noqa: BLE001
+                        pass
         elif verb == "flag":
             await _set_flagged(mac)
         else:
