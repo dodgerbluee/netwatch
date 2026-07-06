@@ -511,8 +511,10 @@ def build_router(*, settings: Settings, templates: Jinja2Templates) -> APIRouter
             verify_tls=verify_tls,
         )
         await settings.save_section("opnsense", cfg.to_dict())
+        supervisor = request.app.state.supervisor
+        await supervisor.restart_task("opnsense-poller")
         return HTMLResponse(
-            '<span class="text-emerald-300 text-xs">OPNsense settings saved.</span>'
+            '<span class="text-emerald-300 text-xs">OPNsense settings saved. Poller restarting.</span>'
         )
 
     @router.post("/settings/config/auth", response_class=HTMLResponse)
