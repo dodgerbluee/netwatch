@@ -268,6 +268,7 @@ def _register_routes(app: FastAPI) -> None:
             try:
                 async with UnifiClient(settings.unifi) as unifi:
                     await unifi.unblock_client(mac)
+                    await unifi.enforce_ssid_restrictions(mac, ssids)
             except Exception:  # noqa: BLE001
                 pass
         return await _device_row(request, mac, templates)
@@ -303,6 +304,13 @@ def _register_routes(app: FastAPI) -> None:
                     allowed_ssids=[],
                 )
             )
+        if settings.unifi.configured:
+            from netwatch.unifi.client import UnifiClient
+            try:
+                async with UnifiClient(settings.unifi) as unifi:
+                    await unifi.clear_ssid_restrictions(mac)
+            except Exception:  # noqa: BLE001
+                pass
         return await _device_row(request, mac, templates)
 
     @app.post("/devices/{mac}/flag", response_class=HTMLResponse)

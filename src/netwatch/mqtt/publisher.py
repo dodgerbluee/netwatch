@@ -75,7 +75,7 @@ async def run_mqtt_bridge(settings: Settings) -> None:
                 engine = PolicyEngine(settings)
                 await asyncio.gather(
                     _decision_loop(client, base),
-                    _command_loop(client, base, engine),
+                    _command_loop(client, base, engine, settings),
                     _periodic_counts_loop(client, base),
                 )
         except aiomqtt.MqttError as exc:
@@ -257,7 +257,7 @@ async def _publish_counts(client: aiomqtt.Client, base: str) -> None:
 
 
 async def _command_loop(
-    client: aiomqtt.Client, base: str, engine: PolicyEngine
+    client: aiomqtt.Client, base: str, engine: PolicyEngine, settings: Settings
 ) -> None:
     """Handle incoming `netwatch/cmd/<verb>` messages."""
 
@@ -281,19 +281,27 @@ async def _command_loop(
             from netwatch.db.models import DeviceKind
             from netwatch.db.repository import set_known
 
+            ssids = list(payload.get("allowed_ssids", []))
             async with session_scope() as session:
                 await set_known(
                     session,
                     mac,
                     kind=DeviceKind(payload.get("kind", "personal")),
                     owner=payload.get("owner", ""),
-                    allowed_ssids=list(payload.get("allowed_ssids", [])),
+                    allowed_ssids=ssids,
                     name=payload.get("name"),
                 )
             try:
                 await engine.unblock(mac)
             except Exception:  # noqa: BLE001
                 pass
+            if settings.unifi.configured:
+                from netwatch.unifi.client import UnifiClient
+                try:
+                    async with UnifiClient(settings.unifi) as unifi:
+                        await unifi.enforce_ssid_restrictions(mac, ssids)
+                except Exception:  # noqa: BLE001
+                    pass
         elif verb == "flag":
             await _set_flagged(mac)
         else:

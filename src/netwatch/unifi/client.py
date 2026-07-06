@@ -121,6 +121,59 @@ class UnifiClient:
             json={"name": name},
         )
 
+    # ----- REST: WLAN MAC filtering --------------------------------------
+
+    async def list_wlans(self) -> list[dict[str, Any]]:
+        data = await self._get(
+            f"/proxy/network/api/s/{self._settings.site}/rest/wlanconf"
+        )
+        return list(data.get("data", []))
+
+    async def _update_wlan_deny_list(
+        self, wlan_id: str, mac_list: list[str]
+    ) -> bool:
+        payload: dict[str, Any] = {"mac_filter_list": mac_list}
+        if mac_list:
+            payload["mac_filter_enabled"] = True
+            payload["mac_filter_policy"] = "deny"
+        else:
+            payload["mac_filter_enabled"] = False
+        return await self._put(
+            f"/proxy/network/api/s/{self._settings.site}/rest/wlanconf/{wlan_id}",
+            json=payload,
+        )
+
+    async def enforce_ssid_restrictions(
+        self, mac: str, allowed_ssids: list[str]
+    ) -> None:
+        """Add MAC to deny list of every SSID not in allowed_ssids.
+
+        If allowed_ssids is empty, remove from all deny lists (no restrictions).
+        """
+        mac_lower = mac.lower()
+        wlans = await self.list_wlans()
+        allowed_lower = {s.lower() for s in allowed_ssids}
+
+        for wlan in wlans:
+            wlan_id = wlan["_id"]
+            wlan_name = (wlan.get("name") or "").lower()
+            current_list = list(wlan.get("mac_filter_list") or [])
+
+            if allowed_ssids and wlan_name not in allowed_lower:
+                if mac_lower not in current_list:
+                    current_list.append(mac_lower)
+                    await self._update_wlan_deny_list(wlan_id, current_list)
+                    log.info("unifi.mac_filter.denied", mac=mac, ssid=wlan["name"])
+            else:
+                if mac_lower in current_list:
+                    current_list.remove(mac_lower)
+                    await self._update_wlan_deny_list(wlan_id, current_list)
+                    log.info("unifi.mac_filter.allowed", mac=mac, ssid=wlan["name"])
+
+    async def clear_ssid_restrictions(self, mac: str) -> None:
+        """Remove MAC from all WLAN deny lists."""
+        await self.enforce_ssid_restrictions(mac, allowed_ssids=[])
+
     # ----- REST: block / unblock ----------------------------------------
 
     async def block_client(self, mac: str) -> bool:
