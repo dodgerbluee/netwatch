@@ -32,6 +32,9 @@ async def run_mqtt_bridge(settings: Settings) -> None:
     base_url = f"http://{settings.http_host}:{settings.http_port}"
     base = mqtt_cfg.base_topic
     discovery = mqtt_cfg.discovery_prefix
+    # Unique client ID to avoid broker kicking us on ID collision.
+    import uuid
+    client_id = f"{mqtt_cfg.client_id}-{uuid.uuid4().hex[:8]}"
 
     while True:
         try:
@@ -40,7 +43,7 @@ async def run_mqtt_bridge(settings: Settings) -> None:
                 port=mqtt_cfg.port,
                 username=mqtt_cfg.username or None,
                 password=mqtt_cfg.password or None,
-                identifier=mqtt_cfg.client_id,
+                identifier=client_id,
                 will=aiomqtt.Will(
                     topic=_topic(base, "status"),
                     payload=b"down",

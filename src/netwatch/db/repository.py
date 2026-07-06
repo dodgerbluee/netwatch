@@ -40,12 +40,15 @@ async def list_devices(
     session: AsyncSession,
     *,
     status: DeviceStatus | None = None,
+    connection_type: ConnectionType | None = None,
     online_only: bool = False,
     limit: int = 500,
 ) -> list[Device]:
     stmt = select(Device).order_by(Device.last_seen_at.desc().nullslast())
     if status is not None:
         stmt = stmt.where(Device.status == status)
+    if connection_type is not None:
+        stmt = stmt.where(Device.connection_type == connection_type)
     if online_only:
         stmt = stmt.where(Device.is_online.is_(True))
     stmt = stmt.limit(limit)

@@ -201,12 +201,19 @@ def _register_routes(app: FastAPI) -> None:
         return {"status": "ready"}    # ----- HTML pages ----------------------------------------------------
 
     @app.get("/", response_class=HTMLResponse)
-    async def index(request: Request, status: str | None = None) -> HTMLResponse:
-        effective = status if status is not None else "unapproved"
+    async def index(
+        request: Request,
+        status: str | None = None,
+        conn: str | None = None,
+    ) -> HTMLResponse:
+        from netwatch.db.models import ConnectionType
+
+        effective = status if status is not None else ("" if conn else "unapproved")
         async with session_scope() as session:
             devices = await list_devices(
                 session,
                 status=DeviceStatus(effective) if effective else None,
+                connection_type=ConnectionType(conn) if conn else None,
             )
             policies = await list_policies(session)
         return templates.TemplateResponse(
@@ -216,6 +223,7 @@ def _register_routes(app: FastAPI) -> None:
                 "devices": devices,
                 "policies": policies,
                 "filter_status": effective,
+                "filter_conn": conn or "",
                 "settings": settings,
                 "DeviceKind": DeviceKind,
                 "DeviceStatus": DeviceStatus,
