@@ -76,19 +76,18 @@ async def init_db(settings: Settings) -> None:
 
 def _add_missing_columns(conn: object) -> None:
     """Best-effort schema migration for new columns on existing tables."""
-    import sqlite3
+    from sqlalchemy import text
 
-    raw = conn.connection.dbapi_connection  # type: ignore[attr-defined]
-    cursor = raw.cursor()
     try:
-        cols = {row[1] for row in cursor.execute("PRAGMA table_info(devices)").fetchall()}
+        cols = {
+            row[1]
+            for row in conn.execute(text("PRAGMA table_info(devices)")).fetchall()  # type: ignore[union-attr]
+        }
         if "connection_type" not in cols:
-            cursor.execute("ALTER TABLE devices ADD COLUMN connection_type VARCHAR(16) DEFAULT 'unknown'")
+            conn.execute(text("ALTER TABLE devices ADD COLUMN connection_type VARCHAR(16) DEFAULT 'unknown'"))  # type: ignore[union-attr]
             log.info("db.migrate.added_column", table="devices", column="connection_type")
     except Exception as exc:  # noqa: BLE001
         log.warning("db.migrate.failed", error=repr(exc))
-    finally:
-        cursor.close()
 
 
 def get_engine() -> AsyncEngine:
