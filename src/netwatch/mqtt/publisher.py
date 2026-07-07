@@ -63,11 +63,33 @@ async def run_mqtt_bridge(settings: Settings) -> None:
                     _topic(base, "status"), b"running", qos=1, retain=True
                 )
 
-                # 3. Clear stale retained messages on non-retained topics.
-                for t in ("last_event", "last_event/summary"):
-                    await client.publish(
-                        _topic(base, t), b"", qos=1, retain=True
-                    )
+                # 3. Replace stale retained alert payloads with valid JSON so
+                # HA automations that read payload_json.verdict evaluate false
+                # on reconnect instead of replaying an old unknown event.
+                idle_payload = {
+                    "mac": "",
+                    "name": "netwatch",
+                    "ssid": "",
+                    "hostname": "",
+                    "ip": "",
+                    "ap_mac": "",
+                    "verdict": Verdict.ALLOW.value,
+                    "severity": "info",
+                    "reason": "startup",
+                    "blocked": False,
+                }
+                await client.publish(
+                    _topic(base, "last_event"),
+                    json.dumps(idle_payload).encode(),
+                    qos=1,
+                    retain=True,
+                )
+                await client.publish(
+                    _topic(base, "last_event/summary"),
+                    b"allow: netwatch -> ?",
+                    qos=1,
+                    retain=True,
+                )
                 await client.publish(
                     _topic(base, "alert"), b"off", qos=1, retain=True
                 )
