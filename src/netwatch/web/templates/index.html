@@ -6,15 +6,15 @@
   <h1 class="text-2xl font-bold">Devices</h1>
   <div class="flex gap-2 text-sm flex-wrap">
     {% for s in ["", "unapproved", "known", "flagged", "blocked"] %}
-      <a href="?status={{ s }}{% if filter_owner %}&owner={{ filter_owner | urlencode }}{% endif %}"
+      <a href="?status={{ s }}{% if filter_conn %}&conn={{ filter_conn | urlencode }}{% endif %}{% if filter_owner %}&owner={{ filter_owner | urlencode }}{% endif %}"
          class="px-3 py-1 rounded-md border
-                {% if filter_status == s and not filter_conn %}border-emerald-400 text-emerald-300{% else %}border-slate-700 text-slate-300 hover:border-slate-500{% endif %}">
+                 {% if filter_status == s %}border-emerald-400 text-emerald-300{% else %}border-slate-700 text-slate-300 hover:border-slate-500{% endif %}">
         {{ s or "all" }}
       </a>
     {% endfor %}
     <span class="border-l border-slate-700 mx-1"></span>
     {% for c in ["wired", "wireless"] %}
-      <a href="?conn={{ c }}{% if filter_owner %}&owner={{ filter_owner | urlencode }}{% endif %}"
+      <a href="?conn={{ c }}{% if filter_status %}&status={{ filter_status | urlencode }}{% endif %}{% if filter_owner %}&owner={{ filter_owner | urlencode }}{% endif %}"
          class="px-3 py-1 rounded-md border
                 {% if filter_conn == c %}border-sky-400 text-sky-300{% else %}border-slate-700 text-slate-300 hover:border-slate-500{% endif %}">
         {{ c }}

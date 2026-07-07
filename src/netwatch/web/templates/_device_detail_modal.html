@@ -45,8 +45,11 @@
 
         <form class="rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-3"
               hx-post="/devices/{{ d.mac }}/owner"
-              hx-target="#device-detail-modal"
-              hx-swap="outerHTML">
+              hx-target="#modal-root"
+              hx-swap="innerHTML">
+          <input type="hidden" name="filter_status" value="{{ filter_status or '' }}" />
+          <input type="hidden" name="filter_conn" value="{{ filter_conn or '' }}" />
+          <input type="hidden" name="filter_owner" value="{{ filter_owner or '' }}" />
           <label class="block text-sm">
             <span class="text-slate-400">Owner</span>
             <input name="owner" value="{{ d.owner or '' }}" placeholder="Select or type a new owner"

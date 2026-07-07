@@ -267,8 +267,21 @@ def _register_routes(app: FastAPI) -> None:
         )
 
     @app.get("/devices/{mac}/details", response_class=HTMLResponse)
-    async def device_details(mac: str, request: Request) -> HTMLResponse:
-        return await _device_detail_modal(request, mac, templates)
+    async def device_details(
+        mac: str,
+        request: Request,
+        filter_status: str = "",
+        filter_conn: str = "",
+        filter_owner: str = "",
+    ) -> HTMLResponse:
+        return await _device_detail_modal(
+            request,
+            mac,
+            templates,
+            filter_status=filter_status,
+            filter_conn=filter_conn,
+            filter_owner=filter_owner,
+        )
 
     # ----- Device mutations ---------------------------------------------
 
@@ -411,6 +424,9 @@ def _register_routes(app: FastAPI) -> None:
         mac: str,
         request: Request,
         owner: str = Form(""),
+        filter_status: str = Form(""),
+        filter_conn: str = Form(""),
+        filter_owner: str = Form(""),
     ) -> HTMLResponse:
         mac = normalize_mac(mac)
         async with session_scope() as session:
@@ -418,7 +434,15 @@ def _register_routes(app: FastAPI) -> None:
             if device is None:
                 raise HTTPException(404, f"no such device: {mac}")
             device.owner = owner.strip()
-        return await _device_detail_modal(request, mac, templates)
+        return await _device_detail_modal(
+            request,
+            mac,
+            templates,
+            filter_status=filter_status,
+            filter_conn=filter_conn,
+            filter_owner=filter_owner,
+            include_row_update=True,
+        )
 
     @app.post("/devices/{mac}/unapprove", response_class=HTMLResponse)
     async def unapprove(mac: str, request: Request) -> HTMLResponse:
@@ -734,12 +758,28 @@ async def _device_row(request: Request, mac: str, templates: Jinja2Templates) ->
     # Template uses `d` as the loop variable in index.html so we pass it as `d`
     # here too. Keeps a single _device_row.html partial for both pages.
     return templates.TemplateResponse(
-        request, "_device_row.html", {"d": device, "policies": policies, "owners": owners}
+        request,
+        "_device_row.html",
+        {
+            "d": device,
+            "policies": policies,
+            "owners": owners,
+            "filter_status": "",
+            "filter_conn": "",
+            "filter_owner": "",
+        },
     )
 
 
 async def _device_detail_modal(
-    request: Request, mac: str, templates: Jinja2Templates
+    request: Request,
+    mac: str,
+    templates: Jinja2Templates,
+    *,
+    filter_status: str = "",
+    filter_conn: str = "",
+    filter_owner: str = "",
+    include_row_update: bool = False,
 ) -> HTMLResponse:
     """Return the device details modal fragment."""
 
@@ -753,6 +793,7 @@ async def _device_detail_modal(
         if device is None:
             raise HTTPException(404, f"no such device: {mac}")
         sightings = await recent_sightings(session, mac=mac, limit=25)
+        policies = await list_policies(session)
         owners = await list_owners(session)
         actions = (
             await session.execute(
@@ -762,11 +803,45 @@ async def _device_detail_modal(
                 .limit(25)
             )
         ).scalars().all()
+    row_visible = _matches_device_filters(
+        device,
+        status=filter_status,
+        connection_type=filter_conn,
+        owner=filter_owner,
+    )
     return templates.TemplateResponse(
         request,
-        "_device_detail_modal.html",
-        {"d": device, "sightings": sightings, "actions": actions, "owners": owners},
+        "_device_detail_modal_update.html" if include_row_update else "_device_detail_modal.html",
+        {
+            "d": device,
+            "sightings": sightings,
+            "actions": actions,
+            "policies": policies,
+            "owners": owners,
+            "filter_status": filter_status,
+            "filter_conn": filter_conn,
+            "filter_owner": filter_owner,
+            "row_visible": row_visible,
+        },
     )
+
+
+def _matches_device_filters(
+    device: Device,
+    *,
+    status: str,
+    connection_type: str,
+    owner: str,
+) -> bool:
+    if status and device.status != status:
+        return False
+    if connection_type and device.connection_type != connection_type:
+        return False
+    if owner == "__none__":
+        return not device.owner
+    if owner and device.owner != owner:
+        return False
+    return True
 
 
 def _merge_ssids(existing: list[str], additions: list[str]) -> list[str]:

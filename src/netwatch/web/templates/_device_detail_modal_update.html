@@ -1,0 +1,7 @@
+{% include "_device_detail_modal.html" %}
+{% if row_visible %}
+  {% set row_oob = true %}
+  {% include "_device_row.html" %}
+{% else %}
+  <tr id="device-{{ d.mac | replace(':','-') }}" hx-swap-oob="delete"></tr>
+{% endif %}

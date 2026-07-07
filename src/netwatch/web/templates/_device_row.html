@@ -1,10 +1,11 @@
 {# Renders one row. Used inline on the index page and as the htmx swap target. #}
 <tr id="device-{{ d.mac | replace(':','-') }}"
     class="hover:bg-slate-900/60 cursor-pointer"
-    hx-get="/devices/{{ d.mac }}/details"
+    hx-get="/devices/{{ d.mac }}/details{% if filter_status or filter_conn or filter_owner %}?{% if filter_status %}filter_status={{ filter_status | urlencode }}{% endif %}{% if filter_status and (filter_conn or filter_owner) %}&{% endif %}{% if filter_conn %}filter_conn={{ filter_conn | urlencode }}{% endif %}{% if filter_conn and filter_owner %}&{% endif %}{% if filter_owner %}filter_owner={{ filter_owner | urlencode }}{% endif %}{% endif %}"
     hx-target="#modal-root"
     hx-swap="innerHTML"
-    hx-trigger="click[event.target.closest('button, form, input, a') == null]">
+    hx-trigger="click[event.target.closest('button, form, input, a') == null]"
+    {% if row_oob %}hx-swap-oob="outerHTML"{% endif %}>
   <td class="px-3 py-2">
     {% set badge = {
       'unapproved': 'bg-amber-500/20 text-amber-300 border-amber-500/40',
