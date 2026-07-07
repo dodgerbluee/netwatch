@@ -68,6 +68,9 @@ async def run_mqtt_bridge(settings: Settings) -> None:
                     await client.publish(
                         _topic(base, t), b"", qos=1, retain=True
                     )
+                await client.publish(
+                    _topic(base, "alert"), b"off", qos=1, retain=True
+                )
 
                 # 4. Publish initial counts.
                 await _publish_counts(client, base)
@@ -184,7 +187,7 @@ async def _decision_loop(client: aiomqtt.Client, base: str) -> None:
             "hostname": de.event.hostname,
             "ip": de.event.ip,
             "ap_mac": de.event.ap_mac,
-            "verdict": str(de.decision.verdict),
+            "verdict": de.decision.verdict.value,
             "severity": de.decision.severity,
             "reason": de.decision.reason,
             "blocked": de.decision.should_block,
@@ -197,7 +200,7 @@ async def _decision_loop(client: aiomqtt.Client, base: str) -> None:
             retain=False,
         )
         summary = (
-            f"{de.decision.verdict}: {device_label} "
+            f"{de.decision.verdict.value}: {device_label} "
             f"-> {de.event.ssid or '?'}"
         )
         await client.publish(
