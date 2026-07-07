@@ -1,0 +1,125 @@
+<div id="device-detail-backdrop"
+     class="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4"
+     onclick="if (event.target.id === 'device-detail-backdrop') document.getElementById('modal-root').innerHTML = ''">
+  <div id="device-detail-modal" class="bg-slate-950 border border-slate-700 rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+    <div class="sticky top-0 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-5 py-4 flex items-start justify-between gap-4">
+      <div>
+        <h2 class="text-xl font-semibold">{{ d.name or "(unnamed device)" }}</h2>
+        <div class="mt-1 font-mono text-xs text-slate-400">{{ d.mac }}</div>
+      </div>
+      <button type="button"
+              class="px-2 py-1 rounded-md border border-slate-700 text-slate-300 hover:border-slate-500"
+              onclick="document.getElementById('modal-root').innerHTML = ''">
+        Close
+      </button>
+    </div>
+
+    <div class="p-5 space-y-5">
+      <div class="grid md:grid-cols-4 gap-3 text-sm">
+        <div class="rounded-lg border border-slate-800 bg-slate-900/60 p-3">
+          <div class="text-xs uppercase text-slate-500">Status</div>
+          <div class="mt-1">{{ d.status }}{% if d.is_online %} <span class="text-emerald-400">online</span>{% endif %}</div>
+        </div>
+        <div class="rounded-lg border border-slate-800 bg-slate-900/60 p-3">
+          <div class="text-xs uppercase text-slate-500">Kind</div>
+          <div class="mt-1">{{ d.kind }}</div>
+        </div>
+        <div class="rounded-lg border border-slate-800 bg-slate-900/60 p-3">
+          <div class="text-xs uppercase text-slate-500">Connection</div>
+          <div class="mt-1">{{ d.connection_type }}</div>
+        </div>
+        <div class="rounded-lg border border-slate-800 bg-slate-900/60 p-3">
+          <div class="text-xs uppercase text-slate-500">Last Seen</div>
+          <div class="mt-1">{{ d.last_seen_at | localtime }}</div>
+        </div>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-4">
+        <div class="rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-2 text-sm">
+          <div><span class="text-slate-500">Hostname:</span> {{ d.hostname or "—" }}</div>
+          <div><span class="text-slate-500">OUI:</span> {{ d.oui or "—" }}</div>
+          <div><span class="text-slate-500">IP:</span> {{ d.last_ip or "—" }}</div>
+          <div><span class="text-slate-500">Last SSID:</span> {{ d.last_ssid or "—" }}</div>
+          <div><span class="text-slate-500">Allowed SSIDs:</span> {{ (d.allowed_ssids or []) | join(", ") or "none" }}</div>
+        </div>
+
+        <form class="rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-3"
+              hx-post="/devices/{{ d.mac }}/owner"
+              hx-target="#device-detail-modal"
+              hx-swap="outerHTML">
+          <label class="block text-sm">
+            <span class="text-slate-400">Owner</span>
+            <input name="owner" value="{{ d.owner or '' }}" placeholder="greg, zac, natalie..."
+                   class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5" />
+          </label>
+          <button type="submit"
+                  class="px-3 py-1.5 rounded-md border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 text-sm">
+            Save Owner
+          </button>
+        </form>
+      </div>
+
+      <section>
+        <h3 class="font-semibold mb-2">Recent History</h3>
+        <div class="overflow-x-auto rounded-lg border border-slate-800">
+          <table class="min-w-full text-xs">
+            <thead class="bg-slate-900 text-slate-400 uppercase">
+              <tr>
+                <th class="px-3 py-2 text-left">When</th>
+                <th class="px-3 py-2 text-left">Event</th>
+                <th class="px-3 py-2 text-left">SSID</th>
+                <th class="px-3 py-2 text-left">IP</th>
+                <th class="px-3 py-2 text-left">AP</th>
+                <th class="px-3 py-2 text-left">RSSI</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800">
+              {% for s in sightings %}
+                <tr>
+                  <td class="px-3 py-2 text-slate-400 whitespace-nowrap">{{ s.observed_at | localtime("%Y-%m-%d %H:%M:%S") }}</td>
+                  <td class="px-3 py-2">{{ s.event }}</td>
+                  <td class="px-3 py-2">{{ s.ssid or "—" }}</td>
+                  <td class="px-3 py-2 text-slate-400">{{ s.ip or "—" }}</td>
+                  <td class="px-3 py-2 font-mono text-slate-500">{{ s.ap_mac or "—" }}</td>
+                  <td class="px-3 py-2 text-slate-400">{{ s.rssi if s.rssi is not none else "—" }}</td>
+                </tr>
+              {% else %}
+                <tr><td colspan="6" class="px-3 py-6 text-center text-slate-500">No sightings yet.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h3 class="font-semibold mb-2">Recent Actions</h3>
+        <div class="overflow-x-auto rounded-lg border border-slate-800">
+          <table class="min-w-full text-xs">
+            <thead class="bg-slate-900 text-slate-400 uppercase">
+              <tr>
+                <th class="px-3 py-2 text-left">When</th>
+                <th class="px-3 py-2 text-left">Kind</th>
+                <th class="px-3 py-2 text-left">Result</th>
+                <th class="px-3 py-2 text-left">SSID</th>
+                <th class="px-3 py-2 text-left">Reason</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800">
+              {% for a in actions %}
+                <tr>
+                  <td class="px-3 py-2 text-slate-400 whitespace-nowrap">{{ a.created_at | localtime("%Y-%m-%d %H:%M:%S") }}</td>
+                  <td class="px-3 py-2">{{ a.kind }}</td>
+                  <td class="px-3 py-2">{{ a.result }}</td>
+                  <td class="px-3 py-2">{{ a.ssid or "—" }}</td>
+                  <td class="px-3 py-2 text-slate-300">{{ a.reason }}</td>
+                </tr>
+              {% else %}
+                <tr><td colspan="5" class="px-3 py-6 text-center text-slate-500">No actions yet.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>

@@ -260,6 +260,10 @@ def _register_routes(app: FastAPI) -> None:
             {"sightings": sightings, "filter_mac": mac or ""},
         )
 
+    @app.get("/devices/{mac}/details", response_class=HTMLResponse)
+    async def device_details(mac: str, request: Request) -> HTMLResponse:
+        return await _device_detail_modal(request, mac, templates)
+
     # ----- Device mutations ---------------------------------------------
 
     @app.post("/devices/{mac}/approve", response_class=HTMLResponse)
@@ -395,6 +399,20 @@ def _register_routes(app: FastAPI) -> None:
             except Exception as exc:  # noqa: BLE001
                 log.warning("ui.rename.unifi_failed", mac=mac, error=repr(exc))
         return await _device_row(request, mac, templates)
+
+    @app.post("/devices/{mac}/owner", response_class=HTMLResponse)
+    async def update_owner(
+        mac: str,
+        request: Request,
+        owner: str = Form(""),
+    ) -> HTMLResponse:
+        mac = normalize_mac(mac)
+        async with session_scope() as session:
+            device = await get_device(session, mac)
+            if device is None:
+                raise HTTPException(404, f"no such device: {mac}")
+            device.owner = owner.strip()
+        return await _device_detail_modal(request, mac, templates)
 
     @app.post("/devices/{mac}/unapprove", response_class=HTMLResponse)
     async def unapprove(mac: str, request: Request) -> HTMLResponse:
@@ -710,6 +728,36 @@ async def _device_row(request: Request, mac: str, templates: Jinja2Templates) ->
     # here too. Keeps a single _device_row.html partial for both pages.
     return templates.TemplateResponse(
         request, "_device_row.html", {"d": device, "policies": policies}
+    )
+
+
+async def _device_detail_modal(
+    request: Request, mac: str, templates: Jinja2Templates
+) -> HTMLResponse:
+    """Return the device details modal fragment."""
+
+    from sqlalchemy import select
+
+    from netwatch.db.models import Action
+
+    mac = normalize_mac(mac)
+    async with session_scope() as session:
+        device = await get_device(session, mac)
+        if device is None:
+            raise HTTPException(404, f"no such device: {mac}")
+        sightings = await recent_sightings(session, mac=mac, limit=25)
+        actions = (
+            await session.execute(
+                select(Action)
+                .where(Action.mac == mac)
+                .order_by(Action.created_at.desc())
+                .limit(25)
+            )
+        ).scalars().all()
+    return templates.TemplateResponse(
+        request,
+        "_device_detail_modal.html",
+        {"d": device, "sightings": sightings, "actions": actions},
     )
 
 

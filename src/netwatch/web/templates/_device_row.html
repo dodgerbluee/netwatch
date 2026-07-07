@@ -1,5 +1,10 @@
 {# Renders one row. Used inline on the index page and as the htmx swap target. #}
-<tr id="device-{{ d.mac | replace(':','-') }}" class="hover:bg-slate-900/60">
+<tr id="device-{{ d.mac | replace(':','-') }}"
+    class="hover:bg-slate-900/60 cursor-pointer"
+    hx-get="/devices/{{ d.mac }}/details"
+    hx-target="#modal-root"
+    hx-swap="innerHTML"
+    hx-trigger="click[event.target.closest('button, form, input, a') == null]">
   <td class="px-3 py-2">
     {% set badge = {
       'unapproved': 'bg-amber-500/20 text-amber-300 border-amber-500/40',
