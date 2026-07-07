@@ -197,7 +197,7 @@ async def _decision_loop(client: aiomqtt.Client, base: str) -> None:
             _topic(base, "last_event"),
             json.dumps(payload).encode(),
             qos=1,
-            retain=False,
+            retain=True,
         )
         summary = (
             f"{de.decision.verdict.value}: {device_label} "
@@ -207,7 +207,7 @@ async def _decision_loop(client: aiomqtt.Client, base: str) -> None:
             _topic(base, "last_event/summary"),
             summary.encode(),
             qos=1,
-            retain=False,
+            retain=True,
         )
         # Alert binary sensor flips on for any non-allow decision.
         alert_state = "on" if de.decision.verdict != Verdict.ALLOW else "off"
