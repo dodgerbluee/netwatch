@@ -67,8 +67,16 @@ class PolicyEngine:
                 enforcement_enabled=enforcement,
             )
 
-        # Short-circuit allow.
+        # Allowed reconnects still publish MQTT state so Home Assistant does
+        # not keep reacting to an older retained/last unknown event. We skip
+        # the DB action row to avoid noisy history for normal traffic.
         if decision.verdict == Verdict.ALLOW and not device_created:
+            await publish_decision(
+                event=event,
+                decision=decision,
+                device_name=device_name,
+                first_block=False,
+            )
             return decision
 
         log.info(
@@ -91,22 +99,23 @@ class PolicyEngine:
                     kind=ActionKind.BLOCK,
                     result=ActionResult.OK if blocked else ActionResult.FAILED,
                     reason=decision.reason,
-                    context={"verdict": str(decision.verdict)},
+                    context={"verdict": decision.verdict.value},
                 )
                 if blocked:
                     await set_status(session, event.mac, DeviceStatus.BLOCKED)
                     first_block = not was_blocked
         else:
-            async with session_scope() as session:
-                await record_action(
-                    session,
-                    mac=event.mac,
-                    ssid=event.ssid,
-                    kind=ActionKind.NOTIFY,
-                    result=ActionResult.OK,
-                    reason=decision.reason,
-                    context={"verdict": str(decision.verdict)},
-                )
+            if decision.verdict != Verdict.ALLOW:
+                async with session_scope() as session:
+                    await record_action(
+                        session,
+                        mac=event.mac,
+                        ssid=event.ssid,
+                        kind=ActionKind.NOTIFY,
+                        result=ActionResult.OK,
+                        reason=decision.reason,
+                        context={"verdict": decision.verdict.value},
+                    )
 
         await publish_decision(
             event=event,
