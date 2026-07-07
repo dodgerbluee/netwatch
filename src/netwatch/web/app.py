@@ -49,6 +49,7 @@ from netwatch.db.models import (
 from netwatch.db.repository import (
     get_device,
     list_devices,
+    list_owners,
     list_policies,
     record_action,
     recent_sightings,
@@ -215,6 +216,7 @@ def _register_routes(app: FastAPI) -> None:
         request: Request,
         status: str | None = None,
         conn: str | None = None,
+        owner: str | None = None,
     ) -> HTMLResponse:
         from netwatch.db.models import ConnectionType
 
@@ -224,16 +226,20 @@ def _register_routes(app: FastAPI) -> None:
                 session,
                 status=DeviceStatus(effective) if effective else None,
                 connection_type=ConnectionType(conn) if conn else None,
+                owner=owner if owner else None,
             )
             policies = await list_policies(session)
+            owners = await list_owners(session)
         return templates.TemplateResponse(
             request,
             "index.html",
             {
                 "devices": devices,
                 "policies": policies,
+                "owners": owners,
                 "filter_status": effective,
                 "filter_conn": conn or "",
+                "filter_owner": owner or "",
                 "settings": settings,
                 "DeviceKind": DeviceKind,
                 "DeviceStatus": DeviceStatus,
@@ -721,13 +727,14 @@ async def _device_row(request: Request, mac: str, templates: Jinja2Templates) ->
     async with session_scope() as session:
         device = await get_device(session, mac)
         policies = await list_policies(session)
+        owners = await list_owners(session)
     if device is None:
         log.warning("ui.device_row.not_found", mac=mac)
         raise HTTPException(404, f"no such device: {mac}")
     # Template uses `d` as the loop variable in index.html so we pass it as `d`
     # here too. Keeps a single _device_row.html partial for both pages.
     return templates.TemplateResponse(
-        request, "_device_row.html", {"d": device, "policies": policies}
+        request, "_device_row.html", {"d": device, "policies": policies, "owners": owners}
     )
 
 
@@ -746,6 +753,7 @@ async def _device_detail_modal(
         if device is None:
             raise HTTPException(404, f"no such device: {mac}")
         sightings = await recent_sightings(session, mac=mac, limit=25)
+        owners = await list_owners(session)
         actions = (
             await session.execute(
                 select(Action)
@@ -757,7 +765,7 @@ async def _device_detail_modal(
     return templates.TemplateResponse(
         request,
         "_device_detail_modal.html",
-        {"d": device, "sightings": sightings, "actions": actions},
+        {"d": device, "sightings": sightings, "actions": actions, "owners": owners},
     )
 
 

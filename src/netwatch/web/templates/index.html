@@ -6,7 +6,7 @@
   <h1 class="text-2xl font-bold">Devices</h1>
   <div class="flex gap-2 text-sm flex-wrap">
     {% for s in ["", "unapproved", "known", "flagged", "blocked"] %}
-      <a href="?status={{ s }}"
+      <a href="?status={{ s }}{% if filter_owner %}&owner={{ filter_owner | urlencode }}{% endif %}"
          class="px-3 py-1 rounded-md border
                 {% if filter_status == s and not filter_conn %}border-emerald-400 text-emerald-300{% else %}border-slate-700 text-slate-300 hover:border-slate-500{% endif %}">
         {{ s or "all" }}
@@ -14,12 +14,26 @@
     {% endfor %}
     <span class="border-l border-slate-700 mx-1"></span>
     {% for c in ["wired", "wireless"] %}
-      <a href="?conn={{ c }}"
+      <a href="?conn={{ c }}{% if filter_owner %}&owner={{ filter_owner | urlencode }}{% endif %}"
          class="px-3 py-1 rounded-md border
                 {% if filter_conn == c %}border-sky-400 text-sky-300{% else %}border-slate-700 text-slate-300 hover:border-slate-500{% endif %}">
         {{ c }}
       </a>
     {% endfor %}
+    <span class="border-l border-slate-700 mx-1"></span>
+    <form action="/" class="inline-flex items-center gap-1">
+      {% if filter_status %}<input type="hidden" name="status" value="{{ filter_status }}" />{% endif %}
+      {% if filter_conn %}<input type="hidden" name="conn" value="{{ filter_conn }}" />{% endif %}
+      <select name="owner"
+              onchange="this.form.submit()"
+              class="bg-slate-950 border rounded-md px-2 py-1 text-sm {% if filter_owner %}border-purple-400 text-purple-300{% else %}border-slate-700 text-slate-300{% endif %}">
+        <option value="">all owners</option>
+        <option value="__none__" {% if filter_owner == "__none__" %}selected{% endif %}>no owner</option>
+        {% for owner in owners %}
+          <option value="{{ owner }}" {% if filter_owner == owner %}selected{% endif %}>{{ owner }}</option>
+        {% endfor %}
+      </select>
+    </form>
   </div>
 </div>
 

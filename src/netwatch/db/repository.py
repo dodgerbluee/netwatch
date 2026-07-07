@@ -42,6 +42,7 @@ async def list_devices(
     *,
     status: DeviceStatus | None = None,
     connection_type: ConnectionType | None = None,
+    owner: str | None = None,
     online_only: bool = False,
     limit: int = 500,
 ) -> list[Device]:
@@ -50,11 +51,23 @@ async def list_devices(
         stmt = stmt.where(Device.status == status)
     if connection_type is not None:
         stmt = stmt.where(Device.connection_type == connection_type)
+    if owner is not None:
+        if owner == "__none__":
+            stmt = stmt.where(Device.owner == "")
+        else:
+            stmt = stmt.where(Device.owner == owner)
     if online_only:
         stmt = stmt.where(Device.is_online.is_(True))
     stmt = stmt.limit(limit)
     res = await session.execute(stmt)
     return list(res.scalars().all())
+
+
+async def list_owners(session: AsyncSession) -> list[str]:
+    res = await session.execute(
+        select(Device.owner).where(Device.owner != "").distinct().order_by(Device.owner)
+    )
+    return [owner for owner in res.scalars().all() if owner]
 
 
 async def upsert_device_from_sighting(
