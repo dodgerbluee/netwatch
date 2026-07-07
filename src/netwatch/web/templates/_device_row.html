@@ -26,7 +26,12 @@
   <td class="px-3 py-2 font-mono text-xs text-slate-400">{{ d.mac }}</td>
   <td class="px-3 py-2">{{ d.kind }}</td>
   <td class="px-3 py-2">{{ d.owner or "—" }}</td>
-  <td class="px-3 py-2">{{ d.last_ssid or "—" }}</td>
+  <td class="px-3 py-2">
+    <div>{{ d.last_ssid or "—" }}</div>
+    <div class="text-[11px] text-slate-500">
+      Allowed: {{ (d.allowed_ssids or []) | join(", ") or "none" }}
+    </div>
+  </td>
   <td class="px-3 py-2 text-slate-400">
     {{ d.last_seen_at | localtime }}
   </td>
@@ -75,6 +80,31 @@
         hx-target="#device-{{ d.mac | replace(':','-') }}"
         hx-swap="outerHTML"
       >Block</button>
+    {% endif %}
+    {% if policies %}
+      <div class="mt-1 flex flex-wrap justify-end gap-1">
+        {% for policy in policies %}
+          {% set is_allowed = policy.ssid in (d.allowed_ssids or []) %}
+          {% if is_allowed %}
+            <button
+              class="px-1.5 py-0.5 text-[11px] rounded border border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
+              hx-post="/devices/{{ d.mac }}/block-ssid"
+              hx-vals='{{ {"ssid": policy.ssid} | tojson }}'
+              hx-target="#device-{{ d.mac | replace(':','-') }}"
+              hx-swap="outerHTML"
+              hx-confirm="Block {{ d.name or d.mac }} from {{ policy.ssid }}?"
+            >Block {{ policy.ssid }}</button>
+          {% else %}
+            <button
+              class="px-1.5 py-0.5 text-[11px] rounded border border-sky-500/40 text-sky-300 hover:bg-sky-500/10"
+              hx-post="/devices/{{ d.mac }}/allow-ssid"
+              hx-vals='{{ {"ssid": policy.ssid} | tojson }}'
+              hx-target="#device-{{ d.mac | replace(':','-') }}"
+              hx-swap="outerHTML"
+            >Allow {{ policy.ssid }}</button>
+          {% endif %}
+        {% endfor %}
+      </div>
     {% endif %}
   </td>
 </tr>
