@@ -24,6 +24,7 @@ from netwatch.db.models import (
     Sighting,
     SightingEvent,
 )
+from netwatch.mac import normalize_mac
 
 
 # ---------------------------------------------------------------------------
@@ -32,7 +33,7 @@ from netwatch.db.models import (
 
 
 async def get_device(session: AsyncSession, mac: str) -> Device | None:
-    mac = mac.lower()
+    mac = normalize_mac(mac)
     return await session.get(Device, mac)
 
 
@@ -72,7 +73,7 @@ async def upsert_device_from_sighting(
     Returns (device, created) so callers can tell first-seen vs returning.
     """
 
-    mac = mac.lower()
+    mac = normalize_mac(mac)
     now = datetime.now(UTC)
     conn = connection_type or (ConnectionType.WIRELESS if ssid else ConnectionType.UNKNOWN)
 
@@ -115,13 +116,13 @@ async def upsert_device_from_sighting(
 
 async def mark_offline(session: AsyncSession, mac: str) -> None:
     await session.execute(
-        update(Device).where(Device.mac == mac.lower()).values(is_online=False)
+        update(Device).where(Device.mac == normalize_mac(mac)).values(is_online=False)
     )
 
 
 async def set_status(session: AsyncSession, mac: str, status: DeviceStatus) -> None:
     await session.execute(
-        update(Device).where(Device.mac == mac.lower()).values(status=status)
+        update(Device).where(Device.mac == normalize_mac(mac)).values(status=status)
     )
 
 
@@ -142,7 +143,7 @@ async def set_known(
     }
     if name:
         values["name"] = name
-    await session.execute(update(Device).where(Device.mac == mac.lower()).values(**values))
+    await session.execute(update(Device).where(Device.mac == normalize_mac(mac)).values(**values))
 
 
 async def sync_unifi_alias(
@@ -160,7 +161,7 @@ async def sync_unifi_alias(
     pollute the DB with every MAC UniFi has ever seen.
     """
 
-    mac = mac.lower()
+    mac = normalize_mac(mac)
     device = await session.get(Device, mac)
     if device is None:
         return False
@@ -191,7 +192,7 @@ async def record_sighting(
     raw: dict[str, Any],
 ) -> Sighting:
     sighting = Sighting(
-        mac=mac.lower(),
+        mac=normalize_mac(mac),
         event=event,
         ssid=ssid,
         ip=ip,
@@ -220,7 +221,7 @@ async def recent_sightings(
         .limit(limit)
     )
     if mac is not None:
-        stmt = stmt.where(Sighting.mac == mac.lower())
+        stmt = stmt.where(Sighting.mac == normalize_mac(mac))
     if since is not None:
         cutoff = datetime.now(UTC) - since
         stmt = stmt.where(Sighting.observed_at >= cutoff)
@@ -293,7 +294,7 @@ async def record_action(
     context: dict[str, Any] | None = None,
 ) -> Action:
     action = Action(
-        mac=mac.lower(),
+        mac=normalize_mac(mac),
         ssid=ssid,
         kind=kind,
         result=result,

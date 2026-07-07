@@ -22,6 +22,7 @@ from netwatch.db.repository import (
 )
 from netwatch.db.session import session_scope
 from netwatch.logging import get_logger
+from netwatch.mac import normalize_mac
 from netwatch.opnsense.client import OPNsenseClient
 
 log = get_logger(__name__)
@@ -71,7 +72,7 @@ async def _poll_once(
     # Build hostname lookup from DHCP leases.
     hostname_map: dict[str, str] = {}
     for lease in dhcp_leases:
-        mac = (lease.get("mac") or "").lower()
+        mac = normalize_mac(lease.get("mac") or "")
         hostname = (lease.get("hostname") or "").strip()
         if mac and hostname:
             hostname_map[mac] = hostname
@@ -80,7 +81,7 @@ async def _poll_once(
     active_macs: set[str] = set()
     ip_map: dict[str, str] = {}
     for entry in arp_entries:
-        mac = (entry.get("mac") or "").lower()
+        mac = normalize_mac(entry.get("mac") or "")
         ip = entry.get("ip") or ""
         if not mac or mac == "(incomplete)" or _is_ignorable(mac):
             continue

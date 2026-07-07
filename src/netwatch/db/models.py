@@ -74,6 +74,7 @@ class SightingEvent(StrEnum):
 class ActionKind(StrEnum):
     BLOCK = "block"
     UNBLOCK = "unblock"
+    APPROVE = "approve"
     NOTIFY = "notify"
     POLICY_VIOLATION = "policy_violation"
 

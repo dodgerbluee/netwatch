@@ -28,6 +28,7 @@ from netwatch.db.repository import (
 )
 from netwatch.db.session import session_scope
 from netwatch.logging import get_logger
+from netwatch.mac import normalize_mac
 from netwatch.policy.engine import PolicyEngine
 from netwatch.unifi.alias_sync import sync_unifi_aliases
 from netwatch.unifi.client import UnifiClient
@@ -72,7 +73,7 @@ async def _seed_active_clients(unifi: UnifiClient, bootstrap_until: float) -> No
     clients = await unifi.list_active_clients()
     async with session_scope() as session:
         for c in clients:
-            mac = (c.get("mac") or "").lower()
+            mac = normalize_mac(c.get("mac") or "")
             if not mac:
                 continue
             ssid = c.get("essid") or ""
@@ -81,7 +82,7 @@ async def _seed_active_clients(unifi: UnifiClient, bootstrap_until: float) -> No
                 mac=mac,
                 ssid=ssid,
                 ip=c.get("ip") or "",
-                ap_mac=(c.get("ap_mac") or "").lower(),
+                ap_mac=normalize_mac(c.get("ap_mac") or ""),
                 hostname=c.get("hostname") or c.get("name") or "",
                 oui=c.get("oui") or "",
             )
@@ -91,7 +92,7 @@ async def _seed_active_clients(unifi: UnifiClient, bootstrap_until: float) -> No
                 event=SightingEvent.CONNECTED,
                 ssid=ssid,
                 ip=c.get("ip") or "",
-                ap_mac=(c.get("ap_mac") or "").lower(),
+                ap_mac=normalize_mac(c.get("ap_mac") or ""),
                 rssi=c.get("rssi") if isinstance(c.get("rssi"), int) else None,
                 raw={"source": "bootstrap", **c},
             )
@@ -142,7 +143,7 @@ async def _reconcile_loop(
 
         seen_macs: set[str] = set()
         for c in clients:
-            mac = (c.get("mac") or "").lower()
+            mac = normalize_mac(c.get("mac") or "")
             if not mac:
                 continue
             seen_macs.add(mac)

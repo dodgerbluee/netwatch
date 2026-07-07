@@ -25,6 +25,7 @@ from netwatch.db.repository import (
 )
 from netwatch.db.session import session_scope
 from netwatch.logging import get_logger
+from netwatch.mac import normalize_mac
 from netwatch.mqtt.bus import publish_decision
 from netwatch.policy.rules import Decision, Verdict, decide
 from netwatch.unifi.client import UnifiClient
@@ -126,6 +127,7 @@ class PolicyEngine:
     async def unblock(self, mac: str) -> bool:
         """Manual unblock path used by the HA actionable button + web UI."""
 
+        mac = normalize_mac(mac)
         try:
             async with UnifiClient(self._settings.unifi) as unifi:
                 ok = await unifi.unblock_client(mac)

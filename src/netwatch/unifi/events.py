@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from netwatch.db.models import SightingEvent
+from netwatch.mac import normalize_mac
 
 # Raw UniFi event keys we care about. Anything else is dropped at the
 # normalizer level so log noise stays sane.
@@ -61,7 +62,7 @@ def normalize(raw: dict[str, Any]) -> NetworkEvent | None:
     """
 
     key = raw.get("key") or raw.get("event") or raw.get("meta", {}).get("message", "")
-    mac = (raw.get("user") or raw.get("mac") or raw.get("client_mac") or "").lower()
+    mac = normalize_mac(raw.get("user") or raw.get("mac") or raw.get("client_mac") or "")
     if not mac:
         return None
 
@@ -79,7 +80,7 @@ def normalize(raw: dict[str, Any]) -> NetworkEvent | None:
         hostname=raw.get("hostname") or raw.get("name") or "",
         oui=raw.get("oui") or "",
         ip=raw.get("ip") or raw.get("ipAddress") or "",
-        ap_mac=(raw.get("ap") or raw.get("ap_mac") or "").lower(),
+        ap_mac=normalize_mac(raw.get("ap") or raw.get("ap_mac") or ""),
         rssi=raw.get("rssi") if isinstance(raw.get("rssi"), int) else None,
         is_wired=bool(raw.get("is_wired") or key.startswith("EVT_LU_")),
         raw=raw,

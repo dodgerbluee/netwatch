@@ -17,6 +17,7 @@ from netwatch.db.models import Device, DeviceStatus
 from netwatch.db.repository import sync_unifi_alias
 from netwatch.db.session import session_scope
 from netwatch.logging import get_logger
+from netwatch.mac import normalize_mac
 from netwatch.unifi.client import UnifiClient
 
 log = get_logger(__name__)
@@ -44,9 +45,9 @@ async def full_sync(settings: Settings) -> SyncResult:
         known_clients = await unifi.list_known_clients()
         active_clients = await unifi.list_active_clients()
 
-    active_macs = {(c.get("mac") or "").lower() for c in active_clients if c.get("mac")}
+    active_macs = {normalize_mac(c.get("mac") or "") for c in active_clients if c.get("mac")}
     blocked_macs = {
-        (u.get("mac") or "").lower()
+        normalize_mac(u.get("mac") or "")
         for u in known_clients
         if u.get("blocked")
     }
@@ -58,7 +59,7 @@ async def full_sync(settings: Settings) -> SyncResult:
         # 1. Sync aliases
         candidates = [u for u in known_clients if (u.get("name") or "").strip()]
         for u in candidates:
-            mac = (u.get("mac") or "").lower()
+            mac = normalize_mac(u.get("mac") or "")
             if not mac:
                 continue
             changed = await sync_unifi_alias(
@@ -96,7 +97,7 @@ async def full_sync(settings: Settings) -> SyncResult:
                 result.blocked_synced += 1
 
         # Create device rows for blocked clients not yet in DB
-        known_by_mac = {(u.get("mac") or "").lower(): u for u in known_clients}
+        known_by_mac = {normalize_mac(u.get("mac") or ""): u for u in known_clients}
         for mac in blocked_macs - existing_macs:
             u = known_by_mac.get(mac, {})
             device = Device(

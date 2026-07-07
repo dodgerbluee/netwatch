@@ -9,7 +9,7 @@ We expose:
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 
 from sqlalchemy import event
@@ -78,6 +78,8 @@ def _add_missing_columns(conn: object) -> None:
     """Best-effort schema migration for new columns on existing tables."""
     from sqlalchemy import text
 
+    from netwatch.mac import normalize_mac
+
     try:
         cols = {
             row[1]
@@ -86,8 +88,67 @@ def _add_missing_columns(conn: object) -> None:
         if "connection_type" not in cols:
             conn.execute(text("ALTER TABLE devices ADD COLUMN connection_type VARCHAR(16) DEFAULT 'unknown'"))  # type: ignore[union-attr]
             log.info("db.migrate.added_column", table="devices", column="connection_type")
+        _canonicalize_mac_rows(conn, normalize_mac)
     except Exception as exc:  # noqa: BLE001
         log.warning("db.migrate.failed", error=repr(exc))
+
+
+def _canonicalize_mac_rows(
+    conn: object, normalize_mac: Callable[[str], str]
+) -> None:
+    """Collapse legacy MAC spellings onto lowercase colon-separated keys."""
+
+    from sqlalchemy import text
+
+    device_rows = conn.execute(text("SELECT mac FROM devices")).fetchall()  # type: ignore[union-attr]
+    groups: dict[str, list[str]] = {}
+    for (mac,) in device_rows:
+        canonical = normalize_mac(mac)
+        groups.setdefault(canonical, []).append(mac)
+
+    device_cols = [
+        row[1]
+        for row in conn.execute(text("PRAGMA table_info(devices)")).fetchall()  # type: ignore[union-attr]
+    ]
+    quoted_cols = ", ".join(f'"{col}"' for col in device_cols)
+    select_cols = ", ".join(
+        ":canonical" if col == "mac" else f'"{col}"' for col in device_cols
+    )
+
+    changed = 0
+    for canonical, macs in groups.items():
+        if macs == [canonical]:
+            continue
+
+        keeper = canonical if canonical in macs else macs[0]
+        if canonical not in macs:
+            conn.execute(  # type: ignore[union-attr]
+                text(
+                    f"INSERT INTO devices ({quoted_cols}) "
+                    f"SELECT {select_cols} FROM devices WHERE mac = :keeper"
+                ),
+                {"canonical": canonical, "keeper": keeper},
+            )
+
+        for mac in macs:
+            if mac == canonical:
+                continue
+            conn.execute(  # type: ignore[union-attr]
+                text("UPDATE sightings SET mac = :canonical WHERE mac = :mac"),
+                {"canonical": canonical, "mac": mac},
+            )
+            conn.execute(  # type: ignore[union-attr]
+                text("UPDATE actions SET mac = :canonical WHERE mac = :mac"),
+                {"canonical": canonical, "mac": mac},
+            )
+            conn.execute(  # type: ignore[union-attr]
+                text("DELETE FROM devices WHERE mac = :mac"),
+                {"mac": mac},
+            )
+            changed += 1
+
+    if changed:
+        log.info("db.migrate.canonicalized_macs", rows=changed)
 
 
 def get_engine() -> AsyncEngine:

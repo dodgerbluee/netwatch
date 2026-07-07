@@ -38,11 +38,19 @@ from netwatch.auth.sessions import get_active_session
 from netwatch.config import Settings
 from sqlalchemy import update
 
-from netwatch.db.models import Device, DeviceKind, DeviceStatus, User
+from netwatch.db.models import (
+    ActionKind,
+    ActionResult,
+    Device,
+    DeviceKind,
+    DeviceStatus,
+    User,
+)
 from netwatch.db.repository import (
     get_device,
     list_devices,
     list_policies,
+    record_action,
     recent_sightings,
     set_known,
     set_status,
@@ -50,6 +58,7 @@ from netwatch.db.repository import (
 )
 from netwatch.db.session import get_engine, session_scope
 from netwatch.logging import get_logger
+from netwatch.mac import normalize_mac
 from netwatch.policy.engine import PolicyEngine
 
 log = get_logger(__name__)
@@ -262,9 +271,12 @@ def _register_routes(app: FastAPI) -> None:
         allowed_ssids: str = Form(""),
         name: str = Form(""),
     ) -> HTMLResponse:
+        mac = normalize_mac(mac)
         requested_ssids = [s.strip() for s in allowed_ssids.split(",") if s.strip()]
         async with session_scope() as session:
             device = await get_device(session, mac)
+            if device is None:
+                raise HTTPException(404, f"no such device: {mac}")
             ssids = _merge_ssids(device.allowed_ssids if device else [], requested_ssids)
             await set_known(
                 session,
@@ -274,19 +286,21 @@ def _register_routes(app: FastAPI) -> None:
                 allowed_ssids=ssids,
                 name=name or None,
             )
-        if settings.unifi.configured:
-            from netwatch.unifi.client import UnifiClient
-            try:
-                async with UnifiClient(settings.unifi) as unifi:
-                    await unifi.unblock_client(mac)
-                    if ssids:
-                        try:
-                            await unifi.enforce_ssid_restrictions(mac, ssids)
-                        except Exception:  # noqa: BLE001
-                            log.warning("ui.approve.ssid_restrict_failed", mac=mac)
-                            await unifi.block_client(mac)
-            except Exception:  # noqa: BLE001
-                pass
+        unifi_ok = await _apply_ssid_restrictions(settings, mac, ssids, unblock=True)
+        async with session_scope() as session:
+            await record_action(
+                session,
+                mac=mac,
+                ssid=",".join(ssids),
+                kind=ActionKind.APPROVE,
+                result=ActionResult.OK if unifi_ok else ActionResult.FAILED,
+                reason="manual approve",
+                context={
+                    "allowed_ssids": ssids,
+                    "source": "web",
+                    "unifi_ok": unifi_ok,
+                },
+            )
         return await _device_row(request, mac, templates)
 
     @app.post("/devices/{mac}/allow-ssid", response_class=HTMLResponse)
@@ -295,6 +309,7 @@ def _register_routes(app: FastAPI) -> None:
         request: Request,
         ssid: str = Form(""),
     ) -> HTMLResponse:
+        mac = normalize_mac(mac)
         ssid = ssid.strip()
         if not ssid:
             raise HTTPException(400, "ssid is required")
@@ -311,7 +326,21 @@ def _register_routes(app: FastAPI) -> None:
                 allowed_ssids=ssids,
                 name=device.name or None,
             )
-        await _apply_ssid_restrictions(settings, mac, ssids, unblock=True)
+        unifi_ok = await _apply_ssid_restrictions(settings, mac, ssids, unblock=True)
+        async with session_scope() as session:
+            await record_action(
+                session,
+                mac=mac,
+                ssid=ssid,
+                kind=ActionKind.APPROVE,
+                result=ActionResult.OK if unifi_ok else ActionResult.FAILED,
+                reason=f"allowed on SSID {ssid!r}",
+                context={
+                    "allowed_ssids": ssids,
+                    "source": "web",
+                    "unifi_ok": unifi_ok,
+                },
+            )
         return await _device_row(request, mac, templates)
 
     @app.post("/devices/{mac}/block-ssid", response_class=HTMLResponse)
@@ -320,6 +349,7 @@ def _register_routes(app: FastAPI) -> None:
         request: Request,
         ssid: str = Form(""),
     ) -> HTMLResponse:
+        mac = normalize_mac(mac)
         ssid = ssid.strip()
         if not ssid:
             raise HTTPException(400, "ssid is required")
@@ -349,12 +379,13 @@ def _register_routes(app: FastAPI) -> None:
 
     @app.post("/devices/{mac}/rename", response_class=HTMLResponse)
     async def rename(mac: str, request: Request, name: str = Form("")) -> HTMLResponse:
+        mac = normalize_mac(mac)
         new_name = name.strip()
         if not new_name:
             raise HTTPException(400, "name is required")
         async with session_scope() as session:
             await session.execute(
-                update(Device).where(Device.mac == mac.lower()).values(name=new_name)
+                update(Device).where(Device.mac == mac).values(name=new_name)
             )
         if settings.unifi.configured:
             from netwatch.unifi.client import UnifiClient
@@ -367,10 +398,11 @@ def _register_routes(app: FastAPI) -> None:
 
     @app.post("/devices/{mac}/unapprove", response_class=HTMLResponse)
     async def unapprove(mac: str, request: Request) -> HTMLResponse:
+        mac = normalize_mac(mac)
         async with session_scope() as session:
             await session.execute(
                 update(Device)
-                .where(Device.mac == mac.lower())
+                .where(Device.mac == mac)
                 .values(
                     status=DeviceStatus.UNAPPROVED,
                     kind=DeviceKind.UNKNOWN,
@@ -390,12 +422,14 @@ def _register_routes(app: FastAPI) -> None:
 
     @app.post("/devices/{mac}/flag", response_class=HTMLResponse)
     async def flag(mac: str, request: Request) -> HTMLResponse:
+        mac = normalize_mac(mac)
         async with session_scope() as session:
             await set_status(session, mac, DeviceStatus.FLAGGED)
         return await _device_row(request, mac, templates)
 
     @app.post("/devices/{mac}/block", response_class=HTMLResponse)
     async def block(mac: str, request: Request) -> HTMLResponse:
+        mac = normalize_mac(mac)
         async with session_scope() as session:
             await set_status(session, mac, DeviceStatus.BLOCKED)
         # Best-effort actual block at UniFi
@@ -410,6 +444,7 @@ def _register_routes(app: FastAPI) -> None:
 
     @app.post("/devices/{mac}/unblock", response_class=HTMLResponse)
     async def unblock(mac: str, request: Request) -> HTMLResponse:
+        mac = normalize_mac(mac)
         engine = PolicyEngine(settings)
         await engine.unblock(mac)
         return await _device_row(request, mac, templates)
@@ -560,7 +595,7 @@ def _register_routes(app: FastAPI) -> None:
         if not stored_key or key != stored_key:
             raise HTTPException(401, "invalid or missing API key")
 
-        mac_filter = request.query_params.get("mac", "")
+        mac_filter = normalize_mac(request.query_params.get("mac", ""))
         limit = min(int(request.query_params.get("limit", "100")), 500)
 
         async with session_scope() as session:
@@ -570,7 +605,7 @@ def _register_routes(app: FastAPI) -> None:
             # Recent actions
             q = select(Action).order_by(Action.created_at.desc()).limit(limit)
             if mac_filter:
-                q = q.where(Action.mac == mac_filter.lower())
+                q = q.where(Action.mac == mac_filter)
             actions = (await session.execute(q)).scalars().all()
 
             # Recent sightings
@@ -581,13 +616,13 @@ def _register_routes(app: FastAPI) -> None:
                 .limit(limit)
             )
             if mac_filter:
-                q = q.where(Sighting.mac == mac_filter.lower())
+                q = q.where(Sighting.mac == mac_filter)
             sightings = (await session.execute(q)).scalars().all()
 
             # All devices
             q = select(Device).order_by(Device.updated_at.desc())
             if mac_filter:
-                q = q.where(Device.mac == mac_filter.lower())
+                q = q.where(Device.mac == mac_filter)
             devices = (await session.execute(q)).scalars().all()
 
             # Policies
@@ -664,6 +699,7 @@ def _register_routes(app: FastAPI) -> None:
 async def _device_row(request: Request, mac: str, templates: Jinja2Templates) -> HTMLResponse:
     """Return just the table row for htmx to swap in."""
 
+    mac = normalize_mac(mac)
     async with session_scope() as session:
         device = await get_device(session, mac)
         policies = await list_policies(session)
@@ -694,19 +730,28 @@ async def _apply_ssid_restrictions(
     allowed_ssids: list[str],
     *,
     unblock: bool = False,
-) -> None:
+) -> bool:
     if not settings.unifi.configured:
-        return
+        return True
     from netwatch.unifi.client import UnifiClient
 
     try:
         async with UnifiClient(settings.unifi) as unifi:
             if unblock:
-                await unifi.unblock_client(mac)
+                ok = await unifi.unblock_client(mac)
+                if not ok:
+                    return False
             if allowed_ssids:
-                await unifi.enforce_ssid_restrictions(mac, allowed_ssids)
+                try:
+                    await unifi.enforce_ssid_restrictions(mac, allowed_ssids)
+                except Exception:
+                    if unblock:
+                        await unifi.block_client(mac)
+                    raise
+        return True
     except Exception as exc:  # noqa: BLE001
         log.warning("ui.ssid_access.unifi_failed", mac=mac, error=repr(exc))
+        return False
 
 
 async def _block_client(settings: Settings, mac: str) -> None:

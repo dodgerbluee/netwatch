@@ -28,6 +28,7 @@ from tenacity import (
 
 from netwatch.config import UniFiConfig
 from netwatch.logging import get_logger
+from netwatch.mac import normalize_mac
 
 log = get_logger(__name__)
 
@@ -109,8 +110,9 @@ class UnifiClient:
         """Set the friendly name (alias) for a client in UniFi."""
         users = await self.list_known_clients()
         user_id = None
+        mac = normalize_mac(mac)
         for u in users:
-            if (u.get("mac") or "").lower() == mac.lower():
+            if normalize_mac(u.get("mac") or "") == mac:
                 user_id = u.get("_id")
                 break
         if not user_id:
@@ -154,14 +156,14 @@ class UnifiClient:
         If allowed_ssids is empty, remove from all deny lists (no restrictions).
         Skips WLANs with an existing allow-list policy to avoid overwriting them.
         """
-        mac_lower = mac.lower()
+        mac_lower = normalize_mac(mac)
         wlans = await self.list_wlans()
         allowed_lower = {s.lower() for s in allowed_ssids}
 
         for wlan in wlans:
             wlan_id = wlan["_id"]
             wlan_name = (wlan.get("name") or "").lower()
-            current_list = list(wlan.get("mac_filter_list") or [])
+            current_list = [normalize_mac(m) for m in list(wlan.get("mac_filter_list") or [])]
             current_policy = wlan.get("mac_filter_policy", "deny")
             filter_enabled = wlan.get("mac_filter_enabled", False)
 
@@ -188,15 +190,15 @@ class UnifiClient:
     # ----- REST: block / unblock ----------------------------------------
 
     async def block_client(self, mac: str) -> bool:
-        return await self._stamgr_cmd("block-sta", mac)
+        return await self._stamgr_cmd("block-sta", normalize_mac(mac))
 
     async def unblock_client(self, mac: str) -> bool:
-        return await self._stamgr_cmd("unblock-sta", mac)
+        return await self._stamgr_cmd("unblock-sta", normalize_mac(mac))
 
     async def _stamgr_cmd(self, cmd: str, mac: str) -> bool:
         ok = await self._post(
             f"/proxy/network/api/s/{self._settings.site}/cmd/stamgr",
-            json={"cmd": cmd, "mac": mac.lower()},
+            json={"cmd": cmd, "mac": normalize_mac(mac)},
         )
         log.info("unifi.stamgr", cmd=cmd, mac=mac, ok=ok)
         return ok

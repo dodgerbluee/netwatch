@@ -13,6 +13,7 @@ from netwatch.config import Settings
 from netwatch.db.models import Device, DeviceStatus
 from netwatch.db.session import session_scope
 from netwatch.logging import get_logger
+from netwatch.mac import normalize_mac
 from netwatch.mqtt.bus import subscribe_decisions
 from netwatch.mqtt.discovery import binary_sensor, sensor
 from netwatch.policy.engine import PolicyEngine
@@ -175,8 +176,10 @@ async def _publish_discovery(
 
 async def _decision_loop(client: aiomqtt.Client, base: str) -> None:
     async for de in subscribe_decisions():
+        device_label = de.device_name or de.event.hostname or de.event.mac
         payload = {
             "mac": de.event.mac,
+            "name": device_label,
             "ssid": de.event.ssid,
             "hostname": de.event.hostname,
             "ip": de.event.ip,
@@ -194,7 +197,7 @@ async def _decision_loop(client: aiomqtt.Client, base: str) -> None:
             retain=False,
         )
         summary = (
-            f"{de.decision.verdict}: {de.event.hostname or de.event.mac} "
+            f"{de.decision.verdict}: {device_label} "
             f"-> {de.event.ssid or '?'}"
         )
         await client.publish(
@@ -211,7 +214,6 @@ async def _decision_loop(client: aiomqtt.Client, base: str) -> None:
 
         # Dedicated blocked event — only fires on first-time blocks.
         if de.first_block:
-            device_label = de.device_name or de.event.hostname or de.event.mac
             blocked_payload = {
                 "mac": de.event.mac,
                 "name": device_label,
@@ -273,7 +275,7 @@ async def _command_loop(
             log.warning("mqtt.cmd.bad_payload", topic=topic, error=repr(exc))
             continue
 
-        mac = (payload.get("mac") or "").lower()
+        mac = normalize_mac(payload.get("mac") or "")
         log.info("mqtt.cmd", verb=verb, mac=mac, payload=payload)
         if not mac:
             continue
@@ -281,11 +283,15 @@ async def _command_loop(
         if verb == "unblock":
             await engine.unblock(mac)
         elif verb == "approve":
-            from netwatch.db.models import DeviceKind
-            from netwatch.db.repository import set_known
+            from netwatch.db.models import ActionKind, ActionResult, DeviceKind
+            from netwatch.db.repository import get_device, record_action, set_known
 
             ssids = list(payload.get("allowed_ssids", []))
             async with session_scope() as session:
+                device = await get_device(session, mac)
+                if device is None:
+                    log.warning("mqtt.approve.not_found", mac=mac)
+                    continue
                 await set_known(
                     session,
                     mac,
@@ -294,22 +300,38 @@ async def _command_loop(
                     allowed_ssids=ssids,
                     name=payload.get("name"),
                 )
-            try:
-                await engine.unblock(mac)
-            except Exception:  # noqa: BLE001
-                pass
-            if settings.unifi.configured and ssids:
-                from netwatch.unifi.client import UnifiClient
-                try:
-                    async with UnifiClient(settings.unifi) as unifi:
-                        await unifi.enforce_ssid_restrictions(mac, ssids)
-                except Exception:  # noqa: BLE001
-                    log.warning("mqtt.approve.ssid_restrict_failed", mac=mac)
+
+            unifi_ok = True
+            if settings.unifi.configured:
+                unifi_ok = await engine.unblock(mac)
+                if ssids:
+                    from netwatch.unifi.client import UnifiClient
                     try:
                         async with UnifiClient(settings.unifi) as unifi:
-                            await unifi.block_client(mac)
+                            await unifi.enforce_ssid_restrictions(mac, ssids)
                     except Exception:  # noqa: BLE001
-                        pass
+                        unifi_ok = False
+                        log.warning("mqtt.approve.ssid_restrict_failed", mac=mac)
+                        try:
+                            async with UnifiClient(settings.unifi) as unifi:
+                                await unifi.block_client(mac)
+                        except Exception:  # noqa: BLE001
+                            pass
+
+            async with session_scope() as session:
+                await record_action(
+                    session,
+                    mac=mac,
+                    ssid=",".join(ssids),
+                    kind=ActionKind.APPROVE,
+                    result=ActionResult.OK if unifi_ok else ActionResult.FAILED,
+                    reason="manual approve",
+                    context={
+                        "allowed_ssids": ssids,
+                        "source": "mqtt",
+                        "unifi_ok": unifi_ok,
+                    },
+                )
         elif verb == "flag":
             await _set_flagged(mac)
         else:
