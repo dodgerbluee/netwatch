@@ -46,17 +46,22 @@ class OPNsenseClient:
         resp = await self._client.get("/api/diagnostics/interface/getArp")
         resp.raise_for_status()
         data = resp.json()
-        return list(data.get("rows", []))
+        log.debug("opnsense.arp.raw_type", type=type(data).__name__,
+                  keys=list(data.keys()) if isinstance(data, dict) else f"list[{len(data)}]")
+        if isinstance(data, list):
+            return data
+        return list(data.get("rows", data.get("arp", [])))
 
     async def get_dhcp_leases(self) -> list[dict[str, Any]]:
         """Return all DHCPv4 leases (active + expired)."""
         assert self._client is not None
-        # ISC DHCP / Kea — the searchLeases endpoint returns all.
         resp = await self._client.get(
             "/api/dhcpv4/leases/searchLease"
         )
         resp.raise_for_status()
         data = resp.json()
+        if isinstance(data, list):
+            return data
         return list(data.get("rows", []))
 
     async def get_interfaces(self) -> dict[str, Any]:
