@@ -20,40 +20,46 @@
 {% endfor %}
 
 {# Filter bar #}
-<div class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3 mb-4 flex flex-wrap gap-3 items-center">
-  <div class="flex flex-col gap-0.5">
+<div class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3 mb-4 flex flex-wrap gap-3 items-end">
+  <div class="flex flex-col gap-1">
     <label class="text-[10px] uppercase tracking-wide text-slate-500 font-medium">Search</label>
     <input id="mqtt-search" type="search" placeholder="Device name or MAC…"
-           class="bg-slate-950 border border-slate-700 rounded-md px-2.5 py-1.5 text-sm w-52
-                  placeholder:text-slate-600 focus:border-slate-500 focus:outline-none" />
+           class="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm w-52
+                  placeholder:text-slate-600 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20 focus:outline-none transition-colors" />
   </div>
 
-  <div class="flex flex-col gap-0.5">
+  <div class="flex flex-col gap-1">
     <label class="text-[10px] uppercase tracking-wide text-slate-500 font-medium">Event</label>
-    <select id="mqtt-event"
-            class="bg-slate-950 border border-slate-700 rounded-md px-2.5 py-1.5 text-sm
-                   focus:border-slate-500 focus:outline-none">
-      <option value="">All events</option>
-      {% for k in ns.kinds | sort %}
-        <option value="{{ k }}">{{ k }}</option>
-      {% endfor %}
-    </select>
+    <div class="relative">
+      <select id="mqtt-event"
+              class="appearance-none bg-slate-950 border border-slate-700 rounded-lg pl-3 pr-8 py-2 text-sm
+                     focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20 focus:outline-none cursor-pointer transition-colors">
+        <option value="">All events</option>
+        {% for k in ns.kinds | sort %}
+          <option value="{{ k }}">{{ k }}</option>
+        {% endfor %}
+      </select>
+      <svg class="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+    </div>
   </div>
 
-  <div class="flex flex-col gap-0.5">
+  <div class="flex flex-col gap-1">
     <label class="text-[10px] uppercase tracking-wide text-slate-500 font-medium">Network</label>
-    <select id="mqtt-network"
-            class="bg-slate-950 border border-slate-700 rounded-md px-2.5 py-1.5 text-sm
-                   focus:border-slate-500 focus:outline-none">
-      <option value="">All networks</option>
-      {% for n in ns.networks | sort %}
-        <option value="{{ n }}">{{ n }}</option>
-      {% endfor %}
-    </select>
+    <div class="relative">
+      <select id="mqtt-network"
+              class="appearance-none bg-slate-950 border border-slate-700 rounded-lg pl-3 pr-8 py-2 text-sm
+                     focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20 focus:outline-none cursor-pointer transition-colors">
+        <option value="">All networks</option>
+        {% for n in ns.networks | sort %}
+          <option value="{{ n }}">{{ n }}</option>
+        {% endfor %}
+      </select>
+      <svg class="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+    </div>
   </div>
 
   <button onclick="clearFilters()"
-          class="mt-4 self-end px-3 py-1.5 text-xs rounded-md border border-slate-700 text-slate-400
+          class="px-3 py-2 text-xs rounded-lg border border-slate-700 text-slate-400
                  hover:border-slate-500 hover:text-slate-300 transition-colors">
     Clear
   </button>

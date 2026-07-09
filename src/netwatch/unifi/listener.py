@@ -150,7 +150,10 @@ async def _reconcile_loop(
 
         async with session_scope() as session:
             res = await session.execute(
-                select(Device.mac).where(Device.is_online.is_(True))
+                select(Device.mac).where(
+                    Device.is_online.is_(True),
+                    Device.connection_type != "wired",
+                )
             )
             online_macs = {row[0] for row in res.all()}
             for mac in online_macs - seen_macs:
@@ -197,6 +200,8 @@ async def _handle_event(
                 await mark_offline(session, evt.mac)
                 return
 
+            from netwatch.db.models import ConnectionType
+
             device, created = await upsert_device_from_sighting(
                 session,
                 mac=evt.mac,
@@ -205,6 +210,7 @@ async def _handle_event(
                 ap_mac=evt.ap_mac,
                 hostname=evt.hostname,
                 oui=evt.oui,
+                connection_type=ConnectionType.WIRED if evt.is_wired else None,
             )
 
             await record_sighting(

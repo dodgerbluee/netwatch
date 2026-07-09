@@ -5,32 +5,33 @@
 <div class="flex items-center justify-between mb-3">
   <h1 class="text-2xl font-bold">Networks</h1>
   <div class="flex items-center gap-3">
+    <button id="toggle-details"
+            onclick="toggleDetails()"
+            class="px-2 py-1 text-xs rounded border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-300">
+      Show devices
+    </button>
     <button id="toggle-offline"
             onclick="toggleOffline()"
-            class="px-2 py-1 text-xs rounded border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-300">
+            class="px-2 py-1 text-xs rounded border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-300 hidden">
       Hide offline
     </button>
-    <p class="text-xs text-slate-500">Click a device to open details</p>
+    <p class="text-xs text-slate-500">Click a network to expand</p>
   </div>
 </div>
 
-{# --- Badge helper (macro-style set) is inlined per card to keep Jinja simple --- #}
-
-<div class="columns-1 sm:columns-2 xl:columns-3 gap-3">
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
 
   {% for net in networks %}
     {% set policy = net.policy %}
     {% set online = net.online %}
     {% set offline = net.offline %}
 
-    <div class="break-inside-avoid mb-3 rounded-xl border border-slate-800 overflow-hidden">
-      {# Header #}
-      <div class="flex items-center justify-between px-3 py-2 bg-slate-900/80 border-b border-slate-800 gap-2">
+    <div class="rounded-xl border border-slate-800 overflow-hidden">
+      {# Header — always visible #}
+      <div class="flex items-center justify-between px-3 py-2 bg-slate-900/80 cursor-pointer gap-2"
+           onclick="this.parentElement.querySelector('.net-devices').classList.toggle('hidden')">
         <div class="flex items-center gap-2 min-w-0">
           <span class="font-semibold text-sm truncate">{{ policy.ssid }}</span>
-          {% if policy.internal_name %}
-            <span class="text-[11px] text-slate-500 truncate hidden sm:block">{{ policy.internal_name }}</span>
-          {% endif %}
           {% if policy.vlan %}
             <span class="px-1 py-0.5 rounded text-[10px] font-mono border border-slate-700 text-slate-400 shrink-0">V{{ policy.vlan }}</span>
           {% endif %}
@@ -48,8 +49,8 @@
         </div>
       </div>
 
-      {# Device rows #}
-      <div class="divide-y divide-slate-800/50">
+      {# Device rows — collapsed by default #}
+      <div class="net-devices hidden divide-y divide-slate-800/50 border-t border-slate-800">
         {% for d in online %}
           {% set badge = {
             'unapproved': 'bg-amber-500/20 text-amber-300 border-amber-500/40',
@@ -89,8 +90,9 @@
 
   {# Wired #}
   {% if wired %}
-  <div class="break-inside-avoid mb-3 rounded-xl border border-slate-700/50 overflow-hidden">
-    <div class="flex items-center justify-between px-3 py-2 bg-slate-900/50 border-b border-slate-800">
+  <div class="rounded-xl border border-slate-700/50 overflow-hidden">
+    <div class="flex items-center justify-between px-3 py-2 bg-slate-900/50 cursor-pointer"
+         onclick="this.parentElement.querySelector('.net-devices').classList.toggle('hidden')">
       <span class="font-semibold text-sm text-slate-300">Wired</span>
       <div class="flex items-center gap-2 text-[11px]">
         {% set w_online = wired | selectattr('is_online') | list %}
@@ -103,7 +105,7 @@
         {% endif %}
       </div>
     </div>
-    <div class="divide-y divide-slate-800/50">
+    <div class="net-devices hidden divide-y divide-slate-800/50 border-t border-slate-800">
       {% for d in wired %}
         {% set badge = {
           'unapproved': 'bg-amber-500/20 text-amber-300 border-amber-500/40',
@@ -129,7 +131,18 @@
 </div>
 
 <script>
+let _showDetails = false;
 let _hideOffline = false;
+
+function toggleDetails() {
+  _showDetails = !_showDetails;
+  document.querySelectorAll('.net-devices').forEach(el => {
+    el.classList.toggle('hidden', !_showDetails);
+  });
+  document.getElementById('toggle-details').textContent = _showDetails ? 'Hide devices' : 'Show devices';
+  document.getElementById('toggle-offline').classList.toggle('hidden', !_showDetails);
+}
+
 function toggleOffline() {
   _hideOffline = !_hideOffline;
   document.querySelectorAll('[data-offline]').forEach(el => {
