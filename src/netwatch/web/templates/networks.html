@@ -16,14 +16,14 @@
 
 {# --- Badge helper (macro-style set) is inlined per card to keep Jinja simple --- #}
 
-<div class="grid sm:grid-cols-2 xl:grid-cols-3 gap-3 items-start">
+<div class="columns-1 sm:columns-2 xl:columns-3 gap-3">
 
   {% for net in networks %}
     {% set policy = net.policy %}
     {% set online = net.online %}
     {% set offline = net.offline %}
 
-    <div class="rounded-xl border border-slate-800 overflow-hidden">
+    <div class="break-inside-avoid mb-3 rounded-xl border border-slate-800 overflow-hidden">
       {# Header #}
       <div class="flex items-center justify-between px-3 py-2 bg-slate-900/80 border-b border-slate-800 gap-2">
         <div class="flex items-center gap-2 min-w-0">
@@ -89,7 +89,7 @@
 
   {# Wired #}
   {% if wired %}
-  <div class="rounded-xl border border-slate-700/50 overflow-hidden">
+  <div class="break-inside-avoid mb-3 rounded-xl border border-slate-700/50 overflow-hidden">
     <div class="flex items-center justify-between px-3 py-2 bg-slate-900/50 border-b border-slate-800">
       <span class="font-semibold text-sm text-slate-300">Wired</span>
       <div class="flex items-center gap-2 text-[11px]">

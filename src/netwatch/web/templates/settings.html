@@ -4,7 +4,7 @@
 {% block content %}
 <h1 class="text-2xl font-bold mb-4">Settings</h1>
 
-<div class="grid lg:grid-cols-2 gap-6 items-start">
+<div class="columns-1 lg:columns-2 gap-6">
 
   <!-- General settings -->
   {% if me.is_admin %}
@@ -13,7 +13,7 @@
 
   <!-- UniFi configuration -->
   {% if me.is_admin %}
-  <section class="rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-3">
+  <section class="break-inside-avoid mb-6 rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-3">
     <h2 class="font-semibold">UniFi Controller</h2>
     <form class="space-y-2 text-sm" id="unifi-form">
       <label class="block">
@@ -88,7 +88,7 @@
 
   <!-- MQTT configuration -->
   {% if me.is_admin %}
-  <section class="rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-3">
+  <section class="break-inside-avoid mb-6 rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-3">
     <h2 class="font-semibold">MQTT Broker</h2>
     <form class="space-y-2 text-sm" id="mqtt-form">
       <label class="block">
@@ -156,7 +156,7 @@
 
   <!-- OPNsense configuration -->
   {% if me.is_admin %}
-  <section class="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
+  <section class="break-inside-avoid mb-6 rounded-lg border border-slate-800 bg-slate-900/40 p-4">
     <h2 class="font-semibold mb-3">OPNsense <span class="text-xs text-slate-500 font-normal">(wired device tracking)</span></h2>
     <form class="text-sm"
           hx-post="/settings/config/opnsense"
@@ -202,7 +202,7 @@
 
   <!-- Auth settings -->
   {% if me.is_admin %}
-  <section class="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
+  <section class="break-inside-avoid mb-6 rounded-lg border border-slate-800 bg-slate-900/40 p-4">
     <h2 class="font-semibold mb-3">Authentication</h2>
     <form class="text-sm"
           hx-post="/settings/config/auth"
@@ -247,7 +247,7 @@
   {% endif %}
 
   <!-- Your account -->
-  <section class="rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-3">
+  <section class="break-inside-avoid mb-6 rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-3">
     <h2 class="font-semibold">Your account</h2>
     <dl class="text-sm grid grid-cols-3 gap-y-1">
       <dt class="text-slate-400">Username</dt><dd class="col-span-2 font-mono">{{ me.username }}</dd>
@@ -297,7 +297,7 @@
 
   <!-- Single sign-on (OIDC) -->
   {% if me.is_admin %}
-  <section class="rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-3"
+  <section class="break-inside-avoid mb-6 rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-3"
            id="sso-section"
            hx-get="/settings/sso"
            hx-trigger="load, sso:refresh from:body"
@@ -307,9 +307,11 @@
   </section>
   {% endif %}
 
-  <!-- Users (admin only) -->
-  {% if me.is_admin %}
-  <section class="rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-3 lg:col-span-2">
+</div>
+
+<!-- Users (admin only) — full-width, outside columns -->
+{% if me.is_admin %}
+<section class="mt-6 rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-3">
     <h2 class="font-semibold">Users</h2>
     <div class="overflow-x-auto rounded border border-slate-800">
       <table class="min-w-full text-sm">
@@ -394,7 +396,5 @@
       <span id="purge-status"></span>
     </div>
   </section>
-  {% endif %}
-
-</div>
+{% endif %}
 {% endblock %}
