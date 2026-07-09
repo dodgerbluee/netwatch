@@ -619,7 +619,8 @@ def _register_routes(app: FastAPI) -> None:
         vlan: int | None = Form(None),
         allow_kinds: str = Form(""),
         allow_owners: str = Form(""),
-        auto_block_unknown: bool = Form(True),
+        auto_block_unknown: bool = Form(False),
+        block_wrong_ssid: bool = Form(False),
         description: str = Form(""),
     ) -> JSONResponse:
         async with session_scope() as session:
@@ -631,6 +632,7 @@ def _register_routes(app: FastAPI) -> None:
                 allow_kinds=[s.strip() for s in allow_kinds.split(",") if s.strip()],
                 allow_owners=[s.strip() for s in allow_owners.split(",") if s.strip()],
                 auto_block_unknown=auto_block_unknown,
+                block_wrong_ssid=block_wrong_ssid,
                 description=description,
             )
         return JSONResponse({"ssid": policy.ssid, "ok": True})

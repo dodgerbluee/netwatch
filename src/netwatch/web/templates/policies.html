@@ -18,11 +18,14 @@
         <span class="font-mono text-emerald-300">{{ p.ssid }}</span>
         <span class="ml-2 text-slate-400 text-xs">VLAN {{ p.vlan or "—" }} · {{ p.internal_name }}</span>
       </div>
-      <div class="text-xs">
+      <div class="flex items-center gap-1.5 text-xs">
         {% if p.auto_block_unknown %}
           <span class="px-2 py-0.5 rounded border border-rose-500/40 text-rose-300 bg-rose-500/10">auto-block</span>
         {% else %}
           <span class="px-2 py-0.5 rounded border border-slate-700 text-slate-400">notify-only</span>
+        {% endif %}
+        {% if p.block_wrong_ssid %}
+          <span class="px-2 py-0.5 rounded border border-amber-500/40 text-amber-300 bg-amber-500/10">wrong-ssid-block</span>
         {% endif %}
       </div>
     </summary>
@@ -53,6 +56,11 @@
           <input type="checkbox" name="auto_block_unknown"
                  {% if p.auto_block_unknown %}checked{% endif %} />
           <span>Auto-block unknown devices on this SSID</span>
+        </label>
+        <label class="inline-flex items-center gap-2 col-span-2">
+          <input type="checkbox" name="block_wrong_ssid"
+                 {% if p.block_wrong_ssid %}checked{% endif %} />
+          <span>Block known devices not approved for this SSID</span>
         </label>
         <label class="block col-span-2">
           <span class="text-slate-400">Description</span>
