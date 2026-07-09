@@ -271,7 +271,7 @@ def _register_routes(app: FastAPI) -> None:
         from netwatch.db.repository import list_policies
 
         async with session_scope() as session:
-            all_devices = await list_devices(session)
+            all_devices = await list_devices(session, limit=10000)
             policies = await list_policies(session)
 
         # Build per-SSID buckets: {ssid: {"online": [...], "offline": [...]}}
@@ -552,11 +552,38 @@ def _register_routes(app: FastAPI) -> None:
                 pass
         return await _device_row(request, mac, templates)
 
-    @app.post("/devices/{mac}/flag", response_class=HTMLResponse)
-    async def flag(mac: str, request: Request) -> HTMLResponse:
+    @app.post("/devices/{mac}/allow-all-ssids", response_class=HTMLResponse)
+    async def allow_all_ssids(
+        mac: str,
+        request: Request,
+        from_modal: bool = Form(False),
+        filter_status: str = Form(""),
+        filter_conn: str = Form(""),
+        filter_owner: str = Form(""),
+    ) -> HTMLResponse:
         mac = normalize_mac(mac)
         async with session_scope() as session:
-            await set_status(session, mac, DeviceStatus.FLAGGED)
+            device = await get_device(session, mac)
+            if device is None:
+                raise HTTPException(404, f"no such device: {mac}")
+            policies = await list_policies(session)
+            all_ssids = [p.ssid for p in policies]
+            ssids = _merge_ssids(device.allowed_ssids or [], all_ssids)
+            await set_known(
+                session,
+                mac,
+                kind=DeviceKind(device.kind),
+                owner=device.owner,
+                allowed_ssids=ssids,
+                name=device.name or None,
+            )
+        await _apply_ssid_restrictions(settings, mac, ssids, unblock=True)
+        if from_modal:
+            return await _device_detail_modal(
+                request, mac, templates,
+                filter_status=filter_status, filter_conn=filter_conn,
+                filter_owner=filter_owner, include_row_update=True,
+            )
         return await _device_row(request, mac, templates)
 
     @app.post("/devices/{mac}/block", response_class=HTMLResponse)

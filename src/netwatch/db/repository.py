@@ -260,9 +260,6 @@ async def list_actions_with_names(
     limit: int = 200,
 ) -> list[dict]:
     """Return recent actions joined with device name for the MQTT history page."""
-    from sqlalchemy import String, cast, label
-    from sqlalchemy import func  # noqa: F401
-
     stmt = (
         select(
             Action,
