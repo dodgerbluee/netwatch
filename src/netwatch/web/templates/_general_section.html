@@ -14,30 +14,33 @@
     </button>
   </form>
 
-  <div class="pt-3 border-t border-slate-800 space-y-2">
-    <h3 class="text-sm font-medium text-slate-300">Debug API key</h3>
-    <p class="text-xs text-slate-500">
-      Generate a key to access <code class="text-xs">/api/debug?key=…</code> for
-      remote troubleshooting. Accepts <code>?mac=</code> and <code>?limit=</code> filters.
-    </p>
-    {% if settings.api_key %}
-      <div class="flex items-center gap-2 flex-wrap">
-        <code class="text-xs font-mono bg-slate-950 px-2 py-1 rounded break-all">{{ settings.api_key }}</code>
+  <div class="pt-2 border-t border-slate-800">
+    <div class="flex items-center justify-between gap-3">
+      <div>
+        <h3 class="text-sm font-medium text-slate-300">Debug API key</h3>
+        <p class="text-xs text-slate-500 mt-0.5">
+          Access <code class="text-xs">/api/debug?key=…</code> for remote troubleshooting.
+        </p>
+      </div>
+      {% if settings.api_key %}
         <button
-          class="px-2 py-1 text-xs rounded border border-rose-500/40 text-rose-300 hover:bg-rose-500/10"
+          class="shrink-0 px-2 py-1 text-xs rounded border border-rose-500/40 text-rose-300 hover:bg-rose-500/10"
           hx-delete="/settings/config/general/api-key"
+          hx-target="#api-key-section"
+          hx-swap="outerHTML"
+        >Revoke</button>
+      {% else %}
+        <button
+          class="shrink-0 px-2 py-1 text-xs rounded border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10"
+          hx-post="/settings/config/general/api-key"
           hx-target="#api-key-status"
           hx-swap="innerHTML"
-        >Revoke</button>
-      </div>
-    {% else %}
-      <button
-        class="px-2 py-1 text-xs rounded border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10"
-        hx-post="/settings/config/general/api-key"
-        hx-target="#api-key-status"
-        hx-swap="innerHTML"
-      >Generate key</button>
+        >Generate</button>
+      {% endif %}
+    </div>
+    {% if settings.api_key %}
+      <code class="block mt-1.5 text-xs font-mono bg-slate-950 px-2 py-1 rounded break-all text-slate-300">{{ settings.api_key }}</code>
     {% endif %}
-    <div id="api-key-status" class="text-xs"></div>
+    <div id="api-key-status" class="text-xs mt-1"></div>
   </div>
 </section>

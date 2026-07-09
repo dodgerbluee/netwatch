@@ -5,7 +5,7 @@
 <div class="flex items-center justify-between mb-4 gap-4 flex-wrap">
   <h1 class="text-2xl font-bold">Devices</h1>
   <div class="flex gap-2 text-sm flex-wrap items-center">
-    {% for s in ["", "unapproved", "known", "flagged", "blocked"] %}
+    {% for s in ["", "unapproved", "known", "flagged"] %}
       <a href="?status={{ s }}{% if filter_conn %}&conn={{ filter_conn | urlencode }}{% endif %}{% if filter_owner %}&owner={{ filter_owner | urlencode }}{% endif %}"
          class="px-3 py-1 rounded-md border
                  {% if filter_status == s %}border-emerald-400 text-emerald-300{% else %}border-slate-700 text-slate-300 hover:border-slate-500{% endif %}">
@@ -17,7 +17,11 @@
 
     {% for c in ["wired", "wireless"] %}
       {% set active = filter_conn == c %}
-      <a href="?{% if not active %}conn={{ c | urlencode }}&{% endif %}{% if filter_status %}status={{ filter_status | urlencode }}&{% endif %}{% if filter_owner %}owner={{ filter_owner | urlencode }}{% endif %}"
+      {% set _parts = [] %}
+      {% if not active %}{% set _parts = _parts + ['conn=' + c | urlencode] %}{% endif %}
+      {% if filter_status %}{% set _parts = _parts + ['status=' + filter_status | urlencode] %}{% endif %}
+      {% if filter_owner %}{% set _parts = _parts + ['owner=' + filter_owner | urlencode] %}{% endif %}
+      <a href="?{{ _parts | join('&') }}"
          class="px-3 py-1 rounded-md border
                 {% if active %}border-sky-400 text-sky-300{% else %}border-slate-700 text-slate-300 hover:border-slate-500{% endif %}">
         {{ c }}
@@ -26,7 +30,10 @@
 
     <span class="border-l border-slate-700 mx-1 self-stretch"></span>
 
-    {% set owner_base = "?" + ("status=" + filter_status + "&" if filter_status else "") + ("conn=" + filter_conn + "&" if filter_conn else "") %}
+    {% set _base = [] %}
+    {% if filter_status %}{% set _base = _base + ['status=' + filter_status | urlencode] %}{% endif %}
+    {% if filter_conn %}{% set _base = _base + ['conn=' + filter_conn | urlencode] %}{% endif %}
+    {% set owner_base = '?' + (_base | join('&') + '&' if _base else '') %}
     <a href="{{ owner_base }}"
        class="px-3 py-1 rounded-full border text-xs
               {% if not filter_owner %}border-purple-400 text-purple-300{% else %}border-slate-700 text-slate-400 hover:border-slate-500{% endif %}">

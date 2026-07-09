@@ -105,7 +105,25 @@
       {# ── Network access ── #}
       {% if policies %}
       <section>
-        <h3 class="font-semibold mb-3">Network Access</h3>
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-semibold">Network Access</h3>
+          {% set ns = namespace(all_allowed=true) %}
+          {% for p in policies %}{% if p.ssid not in (d.allowed_ssids or []) %}{% set ns.all_allowed = false %}{% endif %}{% endfor %}
+          {% if not ns.all_allowed %}
+            <form hx-post="/devices/{{ d.mac }}/allow-all-ssids"
+                  hx-target="#modal-root"
+                  hx-swap="innerHTML">
+              <input type="hidden" name="from_modal" value="1" />
+              <input type="hidden" name="filter_status" value="{{ filter_status or '' }}" />
+              <input type="hidden" name="filter_conn" value="{{ filter_conn or '' }}" />
+              <input type="hidden" name="filter_owner" value="{{ filter_owner or '' }}" />
+              <button type="submit"
+                      class="px-2 py-0.5 text-xs rounded border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10">
+                Allow All
+              </button>
+            </form>
+          {% endif %}
+        </div>
         <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
           {% for policy in policies %}
             {% set is_allowed = policy.ssid in (d.allowed_ssids or []) %}
