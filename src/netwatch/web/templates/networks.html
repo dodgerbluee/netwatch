@@ -2,36 +2,45 @@
 {% block title %}Networks · netwatch{% endblock %}
 
 {% block content %}
-<div class="flex items-center justify-between mb-4">
+<div class="flex items-center justify-between mb-3">
   <h1 class="text-2xl font-bold">Networks</h1>
-  <p class="text-xs text-slate-500">Click a device to open its details</p>
+  <div class="flex items-center gap-3">
+    <button id="toggle-offline"
+            onclick="toggleOffline()"
+            class="px-2 py-1 text-xs rounded border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-300">
+      Hide offline
+    </button>
+    <p class="text-xs text-slate-500">Click a device to open details</p>
+  </div>
 </div>
 
-<div class="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
+{# --- Badge helper (macro-style set) is inlined per card to keep Jinja simple --- #}
+
+<div class="grid sm:grid-cols-2 xl:grid-cols-3 gap-3 items-start">
 
   {% for net in networks %}
     {% set policy = net.policy %}
     {% set online = net.online %}
     {% set offline = net.offline %}
 
-    <div class="rounded-xl border border-slate-800 overflow-hidden flex flex-col">
-      {# Network header #}
-      <div class="flex items-center justify-between px-3 py-2.5 bg-slate-900/80 border-b border-slate-800 gap-2">
+    <div class="rounded-xl border border-slate-800 overflow-hidden">
+      {# Header #}
+      <div class="flex items-center justify-between px-3 py-2 bg-slate-900/80 border-b border-slate-800 gap-2">
         <div class="flex items-center gap-2 min-w-0">
           <span class="font-semibold text-sm truncate">{{ policy.ssid }}</span>
           {% if policy.internal_name %}
-            <span class="text-xs text-slate-500 truncate hidden sm:block">{{ policy.internal_name }}</span>
+            <span class="text-[11px] text-slate-500 truncate hidden sm:block">{{ policy.internal_name }}</span>
           {% endif %}
           {% if policy.vlan %}
             <span class="px-1 py-0.5 rounded text-[10px] font-mono border border-slate-700 text-slate-400 shrink-0">V{{ policy.vlan }}</span>
           {% endif %}
         </div>
-        <div class="flex items-center gap-1.5 shrink-0">
-          {% if online | length > 0 %}
-            <span class="flex items-center gap-1 text-emerald-400 text-xs">
-              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block"></span>
-              {{ online | length }}
-            </span>
+        <div class="flex items-center gap-1.5 shrink-0 text-[11px]">
+          {% if online %}
+            <span class="text-emerald-400">● {{ online | length }}</span>
+          {% endif %}
+          {% if offline %}
+            <span class="text-slate-600">{{ offline | length }} off</span>
           {% endif %}
           {% if policy.auto_block_unknown %}
             <span class="px-1 py-0.5 rounded border border-rose-500/30 text-rose-400 text-[10px]">auto-block</span>
@@ -39,27 +48,29 @@
         </div>
       </div>
 
-      {# Device list #}
-      <div class="divide-y divide-slate-800/60 flex-1">
+      {# Device rows #}
+      <div class="divide-y divide-slate-800/50">
         {% for d in online %}
-          <div class="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-900/40 cursor-pointer"
+          {% set badge = {
+            'unapproved': 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+            'known':      'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+            'flagged':    'bg-rose-500/20 text-rose-300 border-rose-500/40',
+            'blocked':    'bg-slate-500/20 text-slate-300 border-slate-500/40',
+          }[d.status] %}
+          <div class="flex items-center gap-2 px-3 py-1 hover:bg-slate-900/40 cursor-pointer"
                hx-get="/devices/{{ d.mac }}/details"
                hx-target="#modal-root"
                hx-swap="innerHTML">
             <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"></span>
-            <span class="font-medium text-sm min-w-0 truncate">{{ d.name or "(unnamed)" }}</span>
-            {% set badge = {
-              'unapproved': 'bg-amber-500/20 text-amber-300 border-amber-500/40',
-              'known':      'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
-              'flagged':    'bg-rose-500/20 text-rose-300 border-rose-500/40',
-              'blocked':    'bg-slate-500/20 text-slate-300 border-slate-500/40',
-            }[d.status] %}
-            <span class="px-1 py-0.5 rounded border text-[10px] {{ badge }} shrink-0">{{ d.status }}</span>
+            <span class="text-sm min-w-0 truncate">{{ d.name or "(unnamed)" }}</span>
+            <span class="shrink-0 px-1 py-0.5 rounded border text-[10px] {{ badge }}">{{ d.status }}</span>
             <span class="ml-auto font-mono text-[10px] text-slate-500 shrink-0">{{ d.last_ip or "" }}</span>
           </div>
         {% endfor %}
+
         {% for d in offline %}
-          <div class="flex items-center gap-2 px-3 py-1.5 opacity-40 hover:opacity-60 cursor-pointer"
+          <div class="flex items-center gap-2 px-3 py-1 cursor-pointer opacity-40 hover:opacity-60"
+               data-offline="1"
                hx-get="/devices/{{ d.mac }}/details"
                hx-target="#modal-root"
                hx-swap="innerHTML">
@@ -68,38 +79,46 @@
             <span class="ml-auto font-mono text-[10px] text-slate-600 shrink-0">{{ d.mac }}</span>
           </div>
         {% endfor %}
+
         {% if not online and not offline %}
-          <div class="px-3 py-3 text-xs text-slate-600 text-center">No devices</div>
+          <div class="px-3 py-2 text-xs text-slate-600 text-center">No devices</div>
         {% endif %}
       </div>
     </div>
   {% endfor %}
 
-  {# Wired / unassigned #}
+  {# Wired #}
   {% if wired %}
-  <div class="rounded-xl border border-slate-700/50 overflow-hidden flex flex-col">
-    <div class="flex items-center justify-between px-3 py-2.5 bg-slate-900/50 border-b border-slate-800">
+  <div class="rounded-xl border border-slate-700/50 overflow-hidden">
+    <div class="flex items-center justify-between px-3 py-2 bg-slate-900/50 border-b border-slate-800">
       <span class="font-semibold text-sm text-slate-300">Wired</span>
-      <span class="flex items-center gap-1 text-sky-400 text-xs">
-        <span class="w-1.5 h-1.5 rounded-full bg-sky-400 inline-block"></span>
-        {{ wired | length }}
-      </span>
+      <div class="flex items-center gap-2 text-[11px]">
+        {% set w_online = wired | selectattr('is_online') | list %}
+        {% set w_offline = wired | rejectattr('is_online') | list %}
+        {% if w_online %}
+          <span class="text-sky-400">● {{ w_online | length }}</span>
+        {% endif %}
+        {% if w_offline %}
+          <span class="text-slate-600">{{ w_offline | length }} off</span>
+        {% endif %}
+      </div>
     </div>
-    <div class="divide-y divide-slate-800/60">
+    <div class="divide-y divide-slate-800/50">
       {% for d in wired %}
-        <div class="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-900/40 cursor-pointer"
+        {% set badge = {
+          'unapproved': 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+          'known':      'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+          'flagged':    'bg-rose-500/20 text-rose-300 border-rose-500/40',
+          'blocked':    'bg-slate-500/20 text-slate-300 border-slate-500/40',
+        }[d.status] %}
+        <div class="flex items-center gap-2 px-3 py-1 cursor-pointer {% if d.is_online %}hover:bg-slate-900/40{% else %}opacity-40 hover:opacity-60{% endif %}"
+             {% if not d.is_online %}data-offline="1"{% endif %}
              hx-get="/devices/{{ d.mac }}/details"
              hx-target="#modal-root"
              hx-swap="innerHTML">
-          <span class="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0"></span>
-          <span class="font-medium text-sm min-w-0 truncate">{{ d.name or "(unnamed)" }}</span>
-          {% set badge = {
-            'unapproved': 'bg-amber-500/20 text-amber-300 border-amber-500/40',
-            'known':      'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
-            'flagged':    'bg-rose-500/20 text-rose-300 border-rose-500/40',
-            'blocked':    'bg-slate-500/20 text-slate-300 border-slate-500/40',
-          }[d.status] %}
-          <span class="px-1 py-0.5 rounded border text-[10px] {{ badge }} shrink-0">{{ d.status }}</span>
+          <span class="w-1.5 h-1.5 rounded-full {% if d.is_online %}bg-sky-400{% else %}bg-slate-600{% endif %} shrink-0"></span>
+          <span class="text-sm min-w-0 truncate {% if not d.is_online %}text-slate-400{% endif %}">{{ d.name or "(unnamed)" }}</span>
+          <span class="shrink-0 px-1 py-0.5 rounded border text-[10px] {{ badge }}">{{ d.status }}</span>
           <span class="ml-auto font-mono text-[10px] text-slate-500 shrink-0">{{ d.last_ip or "" }}</span>
         </div>
       {% endfor %}
@@ -108,4 +127,15 @@
   {% endif %}
 
 </div>
+
+<script>
+let _hideOffline = false;
+function toggleOffline() {
+  _hideOffline = !_hideOffline;
+  document.querySelectorAll('[data-offline]').forEach(el => {
+    el.classList.toggle('hidden', _hideOffline);
+  });
+  document.getElementById('toggle-offline').textContent = _hideOffline ? 'Show offline' : 'Hide offline';
+}
+</script>
 {% endblock %}

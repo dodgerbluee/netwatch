@@ -257,7 +257,8 @@ async def recent_sightings(
 async def list_actions_with_names(
     session: AsyncSession,
     *,
-    limit: int = 200,
+    since: timedelta | None = None,
+    limit: int = 5000,
 ) -> list[dict]:
     """Return recent actions joined with device name for the MQTT history page."""
     stmt = (
@@ -267,8 +268,11 @@ async def list_actions_with_names(
         )
         .outerjoin(Device, Action.mac == Device.mac)
         .order_by(Action.created_at.desc())
-        .limit(limit)
     )
+    if since is not None:
+        cutoff = datetime.now(UTC) - since
+        stmt = stmt.where(Action.created_at >= cutoff)
+    stmt = stmt.limit(limit)
     rows = (await session.execute(stmt)).all()
     result = []
     for action, device_name in rows:

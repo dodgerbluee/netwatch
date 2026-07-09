@@ -291,7 +291,7 @@ def _register_routes(app: FastAPI) -> None:
 
         wired = [
             d for d in all_devices
-            if d.connection_type == "wired" and d.is_online
+            if d.connection_type == "wired"
         ]
 
         return templates.TemplateResponse(
@@ -302,10 +302,12 @@ def _register_routes(app: FastAPI) -> None:
 
     @app.get("/mqtt", response_class=HTMLResponse)
     async def mqtt_page(request: Request) -> HTMLResponse:
+        from datetime import timedelta
+
         from netwatch.db.repository import list_actions_with_names
 
         async with session_scope() as session:
-            rows = await list_actions_with_names(session, limit=200)
+            rows = await list_actions_with_names(session, since=timedelta(hours=48))
 
         return templates.TemplateResponse(
             request,

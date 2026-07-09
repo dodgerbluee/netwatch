@@ -5,39 +5,58 @@
 <div class="flex items-center justify-between mb-4">
   <div>
     <h1 class="text-2xl font-bold">MQTT History</h1>
-    <p class="text-xs text-slate-500 mt-0.5">Policy decisions published to the MQTT broker — last 200 events</p>
+    <p class="text-xs text-slate-500 mt-0.5">Policy decisions published to the broker — last 48 hours</p>
   </div>
+  <span id="mqtt-count" class="text-sm text-slate-500"></span>
 </div>
 
-{# Collect unique values for filter dropdowns #}
-{% set kinds = [] %}
-{% set networks = [] %}
+{# Collect unique kinds and SSIDs — must use namespace() to mutate across loop iterations #}
+{% set ns = namespace(kinds=[], networks=[]) %}
 {% for row in rows %}
-  {% set a = row.action %}
-  {% if a.kind not in kinds %}{% set kinds = kinds + [a.kind] %}{% endif %}
-  {% if a.ssid and a.ssid not in networks %}{% set networks = networks + [a.ssid] %}{% endif %}
+  {% set k = row.action.kind | string %}
+  {% set n = row.action.ssid %}
+  {% if k not in ns.kinds %}{% set ns.kinds = ns.kinds + [k] %}{% endif %}
+  {% if n and n not in ns.networks %}{% set ns.networks = ns.networks + [n] %}{% endif %}
 {% endfor %}
 
 {# Filter bar #}
-<div class="flex flex-wrap gap-2 mb-3 items-center">
-  <input id="mqtt-search" type="search" placeholder="Device or MAC…"
-         class="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm w-48 focus:border-slate-500 outline-none"
-         oninput="mqttFilter()" />
-  <select id="mqtt-event" class="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm focus:border-slate-500 outline-none"
-          onchange="mqttFilter()">
-    <option value="">All events</option>
-    {% for k in kinds | sort %}
-      <option value="{{ k }}">{{ k }}</option>
-    {% endfor %}
-  </select>
-  <select id="mqtt-network" class="bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm focus:border-slate-500 outline-none"
-          onchange="mqttFilter()">
-    <option value="">All networks</option>
-    {% for n in networks | sort %}
-      <option value="{{ n }}">{{ n }}</option>
-    {% endfor %}
-  </select>
-  <span id="mqtt-count" class="text-xs text-slate-500 ml-1"></span>
+<div class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3 mb-4 flex flex-wrap gap-3 items-center">
+  <div class="flex flex-col gap-0.5">
+    <label class="text-[10px] uppercase tracking-wide text-slate-500 font-medium">Search</label>
+    <input id="mqtt-search" type="search" placeholder="Device name or MAC…"
+           class="bg-slate-950 border border-slate-700 rounded-md px-2.5 py-1.5 text-sm w-52
+                  placeholder:text-slate-600 focus:border-slate-500 focus:outline-none" />
+  </div>
+
+  <div class="flex flex-col gap-0.5">
+    <label class="text-[10px] uppercase tracking-wide text-slate-500 font-medium">Event</label>
+    <select id="mqtt-event"
+            class="bg-slate-950 border border-slate-700 rounded-md px-2.5 py-1.5 text-sm
+                   focus:border-slate-500 focus:outline-none">
+      <option value="">All events</option>
+      {% for k in ns.kinds | sort %}
+        <option value="{{ k }}">{{ k }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="flex flex-col gap-0.5">
+    <label class="text-[10px] uppercase tracking-wide text-slate-500 font-medium">Network</label>
+    <select id="mqtt-network"
+            class="bg-slate-950 border border-slate-700 rounded-md px-2.5 py-1.5 text-sm
+                   focus:border-slate-500 focus:outline-none">
+      <option value="">All networks</option>
+      {% for n in ns.networks | sort %}
+        <option value="{{ n }}">{{ n }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <button onclick="clearFilters()"
+          class="mt-4 self-end px-3 py-1.5 text-xs rounded-md border border-slate-700 text-slate-400
+                 hover:border-slate-500 hover:text-slate-300 transition-colors">
+    Clear
+  </button>
 </div>
 
 {% set kind_styles = {
@@ -57,7 +76,7 @@
   <table class="min-w-full text-sm" id="mqtt-table">
     <thead class="bg-slate-900 text-slate-400 uppercase text-xs">
       <tr>
-        <th class="px-4 py-2.5 text-left">When</th>
+        <th class="px-4 py-2.5 text-left whitespace-nowrap">When</th>
         <th class="px-4 py-2.5 text-left">Device</th>
         <th class="px-4 py-2.5 text-left">Event</th>
         <th class="px-4 py-2.5 text-left">Network</th>
@@ -70,8 +89,8 @@
         {% set a = row.action %}
         {% set device_name = row.device_name %}
         <tr class="hover:bg-slate-900/40"
-            data-device="{{ (device_name or '') | lower }} {{ a.mac | lower }}"
-            data-event="{{ a.kind }}"
+            data-device="{{ (device_name ~ ' ' ~ a.mac) | lower }}"
+            data-event="{{ a.kind | string }}"
             data-network="{{ a.ssid or '' }}">
           <td class="px-4 py-2.5 text-slate-400 whitespace-nowrap text-xs">
             {{ a.created_at | localtime }}
@@ -81,12 +100,13 @@
             <div class="text-[10px] font-mono text-slate-500">{{ a.mac }}</div>
           </td>
           <td class="px-4 py-2.5">
-            <span class="inline-block px-2 py-0.5 rounded border text-xs {{ kind_styles.get(a.kind, 'border-slate-700 text-slate-400') }}">
+            <span class="inline-block px-2 py-0.5 rounded border text-xs
+                         {{ kind_styles.get(a.kind | string, 'border-slate-700 text-slate-400') }}">
               {{ a.kind }}
             </span>
           </td>
           <td class="px-4 py-2.5 text-slate-300 text-xs">{{ a.ssid or "—" }}</td>
-          <td class="px-4 py-2.5 text-xs font-medium {{ result_styles.get(a.result, 'text-slate-400') }}">
+          <td class="px-4 py-2.5 text-xs font-medium {{ result_styles.get(a.result | string, 'text-slate-400') }}">
             {{ a.result }}
           </td>
           <td class="px-4 py-2.5 text-slate-400 text-xs max-w-xs">
@@ -98,7 +118,7 @@
         </tr>
       {% else %}
         <tr>
-          <td colspan="6" class="px-4 py-12 text-center text-slate-500">No MQTT events yet.</td>
+          <td colspan="6" class="px-4 py-12 text-center text-slate-500">No MQTT events in the last 48 hours.</td>
         </tr>
       {% endfor %}
     </tbody>
@@ -106,23 +126,35 @@
 </div>
 
 <script>
+const totalRows = {{ rows | length }};
+
 function mqttFilter() {
-  const search = document.getElementById('mqtt-search').value.toLowerCase();
-  const event  = document.getElementById('mqtt-event').value;
+  const search  = document.getElementById('mqtt-search').value.toLowerCase().trim();
+  const event   = document.getElementById('mqtt-event').value;
   const network = document.getElementById('mqtt-network').value;
-  const rows = document.querySelectorAll('#mqtt-body tr[data-event]');
-  let visible = 0;
+  const rows    = document.querySelectorAll('#mqtt-body tr[data-event]');
+  let visible   = 0;
   rows.forEach(row => {
-    const matchSearch  = !search  || row.dataset.device.includes(search);
-    const matchEvent   = !event   || row.dataset.event === event;
-    const matchNetwork = !network || row.dataset.network === network;
-    const show = matchSearch && matchEvent && matchNetwork;
-    row.style.display = show ? '' : 'none';
-    if (show) visible++;
+    const ok = (!search  || row.dataset.device.includes(search))
+            && (!event   || row.dataset.event === event)
+            && (!network || row.dataset.network === network);
+    row.style.display = ok ? '' : 'none';
+    if (ok) visible++;
   });
-  const count = document.getElementById('mqtt-count');
-  count.textContent = visible < rows.length ? `${visible} of ${rows.length}` : `${rows.length} events`;
+  const el = document.getElementById('mqtt-count');
+  el.textContent = visible < totalRows ? `${visible} of ${totalRows} events` : `${totalRows} events`;
 }
+
+function clearFilters() {
+  document.getElementById('mqtt-search').value = '';
+  document.getElementById('mqtt-event').value  = '';
+  document.getElementById('mqtt-network').value = '';
+  mqttFilter();
+}
+
+document.getElementById('mqtt-search').addEventListener('input', mqttFilter);
+document.getElementById('mqtt-event').addEventListener('change', mqttFilter);
+document.getElementById('mqtt-network').addEventListener('change', mqttFilter);
 mqttFilter();
 </script>
 {% endblock %}
