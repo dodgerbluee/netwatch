@@ -4,7 +4,7 @@
 {% block content %}
 <h1 class="text-2xl font-bold mb-4">Settings</h1>
 
-<div class="grid lg:grid-cols-2 gap-6">
+<div class="grid lg:grid-cols-2 gap-6 items-start">
 
   <!-- General settings -->
   {% if me.is_admin %}
@@ -157,42 +157,44 @@
   <!-- OPNsense configuration -->
   {% if me.is_admin %}
   <section class="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
-    <h2 class="font-semibold mb-2">OPNsense <span class="text-xs text-slate-500">(wired device tracking)</span></h2>
-    <form class="space-y-2 text-sm"
+    <h2 class="font-semibold mb-3">OPNsense <span class="text-xs text-slate-500 font-normal">(wired device tracking)</span></h2>
+    <form class="text-sm"
           hx-post="/settings/config/opnsense"
           hx-target="#opnsense-cfg-status"
           hx-swap="innerHTML">
-      <label class="block">
-        <span class="text-slate-400">Host URL</span>
-        <input type="text" name="host"
-               value="{{ settings.opnsense.host }}"
-               placeholder="https://192.168.1.1"
-               class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 font-mono" />
-      </label>
-      <label class="block">
-        <span class="text-slate-400">API Key</span>
-        <input type="text" name="api_key"
-               value="{{ settings.opnsense.api_key }}"
-               placeholder="System > Access > Users > API keys"
-               class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 font-mono" />
-      </label>
-      <label class="block">
-        <span class="text-slate-400">API Secret</span>
-        <input type="password" name="api_secret"
-               value="{{ '__unchanged__' if settings.opnsense.api_secret else '' }}"
-               class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 font-mono" />
-      </label>
-      <label class="inline-flex items-center gap-2">
-        <input type="checkbox" name="verify_tls"
-               {{ 'checked' if settings.opnsense.verify_tls else '' }} />
-        <span>Verify TLS</span>
-      </label>
-      <div class="flex items-center gap-2 mt-1">
+      <div class="space-y-2">
+        <label class="block">
+          <span class="text-slate-400">Host URL</span>
+          <input type="text" name="host"
+                 value="{{ settings.opnsense.host }}"
+                 placeholder="https://192.168.1.1"
+                 class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 font-mono" />
+        </label>
+        <label class="block">
+          <span class="text-slate-400">API Key</span>
+          <input type="text" name="api_key"
+                 value="{{ settings.opnsense.api_key }}"
+                 placeholder="System > Access > Users > API keys"
+                 class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 font-mono" />
+        </label>
+        <label class="block">
+          <span class="text-slate-400">API Secret</span>
+          <input type="password" name="api_secret"
+                 value="{{ '__unchanged__' if settings.opnsense.api_secret else '' }}"
+                 class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 font-mono" />
+        </label>
+        <label class="inline-flex items-center gap-2">
+          <input type="checkbox" name="verify_tls"
+                 {{ 'checked' if settings.opnsense.verify_tls else '' }} />
+          <span>Verify TLS</span>
+        </label>
+      </div>
+      <div class="flex items-center gap-2 mt-3">
         <button type="submit"
                 class="px-3 py-1.5 rounded-md border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 text-sm">
           Save
         </button>
-        <span id="opnsense-cfg-status" class="text-xs"></span>
+        <span id="opnsense-cfg-status" class="text-xs text-slate-400"></span>
       </div>
     </form>
   </section>
@@ -201,42 +203,44 @@
   <!-- Auth settings -->
   {% if me.is_admin %}
   <section class="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
-    <h2 class="font-semibold mb-2">Authentication</h2>
-    <form class="space-y-2 text-sm"
+    <h2 class="font-semibold mb-3">Authentication</h2>
+    <form class="text-sm"
           hx-post="/settings/config/auth"
           hx-target="#auth-cfg-status"
           hx-swap="innerHTML">
-      <label class="block">
-        <span class="text-slate-400">Session lifetime (days)</span>
-        <input type="number" name="session_lifetime_days"
-               value="{{ auth_settings.session_lifetime_days }}" min="1" max="365"
-               class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 font-mono" />
-      </label>
-      <label class="inline-flex items-center gap-2">
-        <input type="checkbox" name="cookie_secure"
-               {{ 'checked' if auth_settings.cookie_secure else '' }} />
-        <span>Secure cookies (requires HTTPS)</span>
-      </label>
-      <label class="block">
-        <span class="text-slate-400">SameSite</span>
-        <select name="cookie_samesite"
-                class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5">
-          <option value="lax" {{ 'selected' if auth_settings.cookie_samesite == 'lax' else '' }}>Lax</option>
-          <option value="strict" {{ 'selected' if auth_settings.cookie_samesite == 'strict' else '' }}>Strict</option>
-          <option value="none" {{ 'selected' if auth_settings.cookie_samesite == 'none' else '' }}>None</option>
-        </select>
-      </label>
-      <label class="block">
-        <span class="text-slate-400">External URL (for OIDC callbacks behind a proxy)</span>
-        <input name="external_url" value="{{ auth_settings.external_url }}"
-               placeholder="https://netwatch.example.com"
-               class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 font-mono" />
-      </label>
-      <div class="flex items-center gap-2 mt-1">
+      <div class="space-y-2">
+        <label class="block">
+          <span class="text-slate-400">Session lifetime (days)</span>
+          <input type="number" name="session_lifetime_days"
+                 value="{{ auth_settings.session_lifetime_days }}" min="1" max="365"
+                 class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 font-mono" />
+        </label>
+        <label class="inline-flex items-center gap-2">
+          <input type="checkbox" name="cookie_secure"
+                 {{ 'checked' if auth_settings.cookie_secure else '' }} />
+          <span>Secure cookies (requires HTTPS)</span>
+        </label>
+        <label class="block">
+          <span class="text-slate-400">SameSite</span>
+          <select name="cookie_samesite"
+                  class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5">
+            <option value="lax" {{ 'selected' if auth_settings.cookie_samesite == 'lax' else '' }}>Lax</option>
+            <option value="strict" {{ 'selected' if auth_settings.cookie_samesite == 'strict' else '' }}>Strict</option>
+            <option value="none" {{ 'selected' if auth_settings.cookie_samesite == 'none' else '' }}>None</option>
+          </select>
+        </label>
+        <label class="block">
+          <span class="text-slate-400">External URL <span class="text-slate-600 font-normal">(for OIDC callbacks behind a proxy)</span></span>
+          <input name="external_url" value="{{ auth_settings.external_url }}"
+                 placeholder="https://netwatch.example.com"
+                 class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 font-mono" />
+        </label>
+      </div>
+      <div class="flex items-center gap-2 mt-3">
         <button class="px-3 py-1.5 rounded-md border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 text-sm">
           Save
         </button>
-        <span id="auth-cfg-status" class="text-xs"></span>
+        <span id="auth-cfg-status" class="text-xs text-slate-400"></span>
       </div>
     </form>
   </section>

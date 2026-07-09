@@ -1,12 +1,12 @@
-<section id="general-section" class="rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-3">
-  <h2 class="font-semibold">General</h2>
-  <form method="post" action="/settings/config/general" class="space-y-2 text-sm">
+<section id="general-section" class="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
+  <h2 class="font-semibold mb-3">General</h2>
+  <form method="post" action="/settings/config/general" class="text-sm">
     <label class="inline-flex items-center gap-2">
       <input type="checkbox" name="enforcement_enabled" value="on"
              {{ 'checked' if settings.enforcement_enabled else '' }} />
       <span>Enable auto-block enforcement</span>
     </label>
-    <p class="text-xs text-slate-500">
+    <p class="text-xs text-slate-500 mt-1 mb-2">
       When off, netwatch monitors and alerts but never blocks devices at UniFi.
     </p>
     <button class="px-3 py-1.5 rounded-md border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 text-sm">
@@ -14,7 +14,7 @@
     </button>
   </form>
 
-  <div class="pt-2 border-t border-slate-800">
+  <div class="mt-3 pt-3 border-t border-slate-800">
     <div class="flex items-center justify-between gap-3">
       <div>
         <h3 class="text-sm font-medium text-slate-300">Debug API key</h3>
@@ -22,25 +22,26 @@
           Access <code class="text-xs">/api/debug?key=…</code> for remote troubleshooting.
         </p>
       </div>
-      {% if settings.api_key %}
-        <button
-          class="shrink-0 px-2 py-1 text-xs rounded border border-rose-500/40 text-rose-300 hover:bg-rose-500/10"
-          hx-delete="/settings/config/general/api-key"
-          hx-target="#api-key-section"
-          hx-swap="outerHTML"
-        >Revoke</button>
-      {% else %}
-        <button
-          class="shrink-0 px-2 py-1 text-xs rounded border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10"
-          hx-post="/settings/config/general/api-key"
-          hx-target="#api-key-status"
-          hx-swap="innerHTML"
-        >Generate</button>
-      {% endif %}
+      <div id="api-key-section" class="shrink-0">
+        {% if settings.api_key %}
+          <button
+            class="px-2 py-1 text-xs rounded border border-rose-500/40 text-rose-300 hover:bg-rose-500/10"
+            hx-delete="/settings/config/general/api-key"
+            hx-target="#api-key-section"
+            hx-swap="outerHTML"
+          >Revoke</button>
+        {% else %}
+          <button
+            class="px-2 py-1 text-xs rounded border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10"
+            hx-post="/settings/config/general/api-key"
+            hx-target="#api-key-section"
+            hx-swap="outerHTML"
+          >Generate</button>
+        {% endif %}
+      </div>
     </div>
     {% if settings.api_key %}
-      <code class="block mt-1.5 text-xs font-mono bg-slate-950 px-2 py-1 rounded break-all text-slate-300">{{ settings.api_key }}</code>
+      <code class="block mt-2 text-xs font-mono bg-slate-950 px-2 py-1 rounded break-all text-slate-300">{{ settings.api_key }}</code>
     {% endif %}
-    <div id="api-key-status" class="text-xs mt-1"></div>
   </div>
 </section>
