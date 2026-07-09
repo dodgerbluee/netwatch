@@ -11,6 +11,15 @@ from netwatch.db.models import SightingEvent
 from netwatch.unifi.events import NetworkEvent
 
 
+@pytest.fixture(autouse=True)
+def _reset_cooldowns():
+    from netwatch.policy import cooldown
+
+    cooldown.reset()
+    yield
+    cooldown.reset()
+
+
 @pytest.fixture
 def mac() -> str:
     return "aa:bb:cc:11:22:33"

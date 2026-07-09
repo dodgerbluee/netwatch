@@ -27,7 +27,8 @@ from netwatch.db.session import session_scope
 from netwatch.logging import get_logger
 from netwatch.mac import normalize_mac
 from netwatch.mqtt.bus import publish_decision
-from netwatch.policy.rules import Decision, Verdict, decide
+from netwatch.policy import cooldown
+from netwatch.policy.rules import NOTIFY_VERDICTS, Decision, Verdict, decide
 from netwatch.unifi.client import UnifiClient
 from netwatch.unifi.events import NetworkEvent
 
@@ -79,12 +80,25 @@ class PolicyEngine:
             )
             return decision
 
+        # Blocked devices retry association forever. Re-issue the block at
+        # most once per cooldown window and never raise an alert for it.
+        if decision.verdict == Verdict.REBLOCK:
+            await self._reblock(event, decision, device_name)
+            return decision
+
         log.info(
             "policy.decision",
             mac=event.mac,
             verdict=str(decision.verdict),
             block=decision.should_block,
             reason=decision.reason,
+        )
+
+        # One notification per MAC per cooldown window; repeat sightings of
+        # the same unapproved/flagged device only refresh retained state.
+        # Status changes (approve / flag / unblock) re-arm the cooldown.
+        notify = decision.verdict in NOTIFY_VERDICTS and cooldown.ready(
+            cooldown.alert_key(event.mac)
         )
 
         # --- side effects -------------------------------------------------
@@ -105,7 +119,7 @@ class PolicyEngine:
                     await set_status(session, event.mac, DeviceStatus.BLOCKED)
                     first_block = not was_blocked
         else:
-            if decision.verdict != Verdict.ALLOW:
+            if notify:
                 async with session_scope() as session:
                     await record_action(
                         session,
@@ -122,8 +136,32 @@ class PolicyEngine:
             decision=decision,
             device_name=device_name,
             first_block=first_block,
+            notify=notify,
         )
         return decision
+
+    async def _reblock(
+        self, event: NetworkEvent, decision: Decision, device_name: str
+    ) -> None:
+        if decision.should_block and cooldown.ready(cooldown.reblock_key(event.mac)):
+            log.info("policy.reblock", mac=event.mac, reason=decision.reason)
+            blocked = await self._block(event)
+            async with session_scope() as session:
+                await record_action(
+                    session,
+                    mac=event.mac,
+                    ssid=event.ssid,
+                    kind=ActionKind.BLOCK,
+                    result=ActionResult.OK if blocked else ActionResult.FAILED,
+                    reason=decision.reason,
+                    context={"verdict": decision.verdict.value},
+                )
+        await publish_decision(
+            event=event,
+            decision=decision,
+            device_name=device_name,
+            first_block=False,
+        )
 
     async def _block(self, event: NetworkEvent) -> bool:
         try:

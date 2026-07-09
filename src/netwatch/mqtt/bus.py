@@ -21,6 +21,10 @@ class DecisionEvent:
     decision: Decision
     device_name: str = ""
     first_block: bool = False
+    # True when this decision should raise a user-facing notification.
+    # Cooldown-gated by the engine; the publisher fires the non-retained
+    # event topic only when set.
+    notify: bool = False
 
 
 _queue: asyncio.Queue[DecisionEvent] = asyncio.Queue(maxsize=1024)
@@ -32,6 +36,7 @@ async def publish_decision(
     decision: Decision,
     device_name: str = "",
     first_block: bool = False,
+    notify: bool = False,
 ) -> None:
     """Non-blocking publish. Drops oldest if the queue overflows so we
     never stall the policy engine on a slow broker."""
@@ -41,6 +46,7 @@ async def publish_decision(
         decision=decision,
         device_name=device_name,
         first_block=first_block,
+        notify=notify,
     )
     try:
         _queue.put_nowait(de)

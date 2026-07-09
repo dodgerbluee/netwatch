@@ -17,7 +17,7 @@ from netwatch.mac import normalize_mac
 from netwatch.mqtt.bus import subscribe_decisions
 from netwatch.mqtt.discovery import binary_sensor, sensor
 from netwatch.policy.engine import PolicyEngine
-from netwatch.policy.rules import Verdict
+from netwatch.policy.rules import NOTIFY_VERDICTS, Verdict
 
 log = get_logger(__name__)
 
@@ -231,11 +231,23 @@ async def _decision_loop(client: aiomqtt.Client, base: str) -> None:
             qos=1,
             retain=True,
         )
-        # Alert binary sensor flips on for any non-allow decision.
-        alert_state = "on" if de.decision.verdict != Verdict.ALLOW else "off"
+        # Alert binary sensor: on for notify verdicts only. REBLOCK is a
+        # handled situation (block re-enforced), not something pending.
+        alert_state = "on" if de.decision.verdict in NOTIFY_VERDICTS else "off"
         await client.publish(
             _topic(base, "alert"), alert_state.encode(), qos=1, retain=True
         )
+
+        # Fire-once notification event. Non-retained and cooldown-gated by
+        # the engine, so automations can trigger on it without replaying
+        # stale alerts on broker reconnect or re-alerting on every retry.
+        if de.notify:
+            await client.publish(
+                _topic(base, "event/alert"),
+                json.dumps(payload).encode(),
+                qos=1,
+                retain=False,
+            )
 
         # Dedicated blocked event — only fires on first-time blocks.
         if de.first_block:

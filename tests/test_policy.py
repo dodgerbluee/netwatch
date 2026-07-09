@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from netwatch.db.models import DeviceKind, DeviceStatus
-from netwatch.policy.rules import Verdict, decide
+from netwatch.policy.rules import NOTIFY_VERDICTS, Verdict, decide
 
 
 def test_unknown_device_auto_blocks_when_enforcement_on(make_event, make_device, make_policy):
@@ -130,3 +130,33 @@ def test_kid_owner_blocked_on_trusted(make_event, make_device, make_policy):
         enforcement_enabled=True,
     )
     assert decision.verdict == Verdict.NOTIFY_WRONG_SSID
+
+
+def test_blocked_device_reassociation_is_reblock_not_alert(
+    make_event, make_device, make_policy
+):
+    """A blocked device retrying association must re-enforce the block,
+    not masquerade as a fresh unknown-device notification."""
+
+    decision = decide(
+        device=make_device(status=DeviceStatus.BLOCKED),
+        policy=make_policy(),
+        event=make_event(),
+        enforcement_enabled=True,
+    )
+    assert decision.verdict == Verdict.REBLOCK
+    assert decision.verdict not in NOTIFY_VERDICTS
+    assert decision.should_block is True
+
+
+def test_blocked_device_reassociation_respects_enforcement_off(
+    make_event, make_device, make_policy
+):
+    decision = decide(
+        device=make_device(status=DeviceStatus.BLOCKED),
+        policy=make_policy(),
+        event=make_event(),
+        enforcement_enabled=False,
+    )
+    assert decision.verdict == Verdict.REBLOCK
+    assert decision.should_block is False

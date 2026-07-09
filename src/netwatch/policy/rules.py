@@ -18,6 +18,13 @@ class Verdict(StrEnum):
     NOTIFY_UNKNOWN = "notify_unknown"
     NOTIFY_WRONG_SSID = "notify_wrong_ssid"
     NOTIFY_FLAGGED = "notify_flagged"
+    REBLOCK = "reblock"              # blocked device re-associated; re-enforce, no alert
+
+
+# Verdicts that warrant a user-facing notification.
+NOTIFY_VERDICTS = frozenset(
+    {Verdict.NOTIFY_UNKNOWN, Verdict.NOTIFY_WRONG_SSID, Verdict.NOTIFY_FLAGGED}
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,12 +89,13 @@ def decide(
 
     # ---- 4. Already-blocked device that somehow associated ------------
     if device.status == DeviceStatus.BLOCKED:
-        # Re-issue the block; UniFi may have lost the rule across a
-        # firmware restore or a manual unblock.
+        # Re-issue the block (UniFi may have lost the rule across a
+        # firmware restore or a manual unblock), but blocked clients retry
+        # association constantly — a retry is not a fresh alert.
         return Decision(
-            verdict=Verdict.NOTIFY_UNKNOWN,
+            verdict=Verdict.REBLOCK,
             should_block=enforcement_enabled,
-            severity="warning",
+            severity="info",
             reason=f"blocked device {device.mac} re-associated to {event.ssid!r}",
         )
 

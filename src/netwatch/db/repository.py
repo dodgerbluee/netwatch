@@ -25,6 +25,7 @@ from netwatch.db.models import (
     SightingEvent,
 )
 from netwatch.mac import normalize_mac
+from netwatch.policy import cooldown
 
 
 # ---------------------------------------------------------------------------
@@ -134,9 +135,13 @@ async def mark_offline(session: AsyncSession, mac: str) -> None:
 
 
 async def set_status(session: AsyncSession, mac: str, status: DeviceStatus) -> None:
-    await session.execute(
-        update(Device).where(Device.mac == normalize_mac(mac)).values(status=status)
-    )
+    mac = normalize_mac(mac)
+    await session.execute(update(Device).where(Device.mac == mac).values(status=status))
+    # A status change re-arms alerting for this MAC — except the engine's own
+    # transition to BLOCKED, which must keep the re-block cooldown intact so
+    # association retries don't hammer the UniFi API.
+    if status != DeviceStatus.BLOCKED:
+        cooldown.clear(mac)
 
 
 async def set_known(
@@ -156,7 +161,9 @@ async def set_known(
     }
     if name:
         values["name"] = name
-    await session.execute(update(Device).where(Device.mac == normalize_mac(mac)).values(**values))
+    mac = normalize_mac(mac)
+    await session.execute(update(Device).where(Device.mac == mac).values(**values))
+    cooldown.clear(mac)
 
 
 async def sync_unifi_alias(

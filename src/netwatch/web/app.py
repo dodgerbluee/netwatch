@@ -446,6 +446,8 @@ def _register_routes(app: FastAPI) -> None:
 
     @app.post("/devices/{mac}/unapprove", response_class=HTMLResponse)
     async def unapprove(mac: str, request: Request) -> HTMLResponse:
+        from netwatch.policy import cooldown
+
         mac = normalize_mac(mac)
         async with session_scope() as session:
             await session.execute(
@@ -458,6 +460,7 @@ def _register_routes(app: FastAPI) -> None:
                     allowed_ssids=[],
                 )
             )
+        cooldown.clear(mac)
         if settings.unifi.configured:
             from netwatch.unifi.client import UnifiClient
             try:
