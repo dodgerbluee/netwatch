@@ -2,23 +2,55 @@
      class="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4"
      onclick="if (event.target.id === 'device-detail-backdrop') document.getElementById('modal-root').innerHTML = ''">
   <div id="device-detail-modal" class="bg-slate-950 border border-slate-700 rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+
+    {# ── Header ── #}
     <div class="sticky top-0 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-5 py-4 flex items-start justify-between gap-4">
-      <div>
-        <h2 class="text-xl font-semibold">{{ d.name or "(unnamed device)" }}</h2>
+      <div class="flex-1 min-w-0">
+        <div id="modal-name-display-{{ d.mac | replace(':','-') }}" class="flex items-center gap-2">
+          <h2 class="text-xl font-semibold truncate">{{ d.name or "(unnamed device)" }}</h2>
+          <button type="button"
+                  class="shrink-0 text-xs text-slate-500 hover:text-slate-300 px-1.5 py-0.5 rounded border border-slate-700 hover:border-slate-500"
+                  onclick="
+                    document.getElementById('modal-rename-{{ d.mac | replace(':','-') }}').classList.remove('hidden');
+                    this.closest('[id^=modal-name-display]').classList.add('hidden');
+                  ">rename</button>
+        </div>
+        <form id="modal-rename-{{ d.mac | replace(':','-') }}"
+              class="hidden flex items-center gap-2 mt-0.5"
+              hx-post="/devices/{{ d.mac }}/rename"
+              hx-target="#modal-root"
+              hx-swap="innerHTML">
+          <input type="hidden" name="from_modal" value="1" />
+          <input type="hidden" name="filter_status" value="{{ filter_status or '' }}" />
+          <input type="hidden" name="filter_conn" value="{{ filter_conn or '' }}" />
+          <input type="hidden" name="filter_owner" value="{{ filter_owner or '' }}" />
+          <input name="name" value="{{ d.name or '' }}" placeholder="Device name"
+                 class="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-sm w-56" autofocus />
+          <button type="submit"
+                  class="px-2 py-1 text-xs rounded border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10">Save</button>
+          <button type="button"
+                  class="px-2 py-1 text-xs rounded border border-slate-700 text-slate-400 hover:border-slate-500"
+                  onclick="
+                    document.getElementById('modal-rename-{{ d.mac | replace(':','-') }}').classList.add('hidden');
+                    document.getElementById('modal-name-display-{{ d.mac | replace(':','-') }}').classList.remove('hidden');
+                  ">Cancel</button>
+        </form>
         <div class="mt-1 font-mono text-xs text-slate-400">{{ d.mac }}</div>
       </div>
       <button type="button"
-              class="px-2 py-1 rounded-md border border-slate-700 text-slate-300 hover:border-slate-500"
+              class="shrink-0 px-2 py-1 rounded-md border border-slate-700 text-slate-300 hover:border-slate-500"
               onclick="document.getElementById('modal-root').innerHTML = ''">
         Close
       </button>
     </div>
 
     <div class="p-5 space-y-5">
+
+      {# ── Stats strip ── #}
       <div class="grid md:grid-cols-4 gap-3 text-sm">
         <div class="rounded-lg border border-slate-800 bg-slate-900/60 p-3">
           <div class="text-xs uppercase text-slate-500">Status</div>
-          <div class="mt-1">{{ d.status }}{% if d.is_online %} <span class="text-emerald-400">online</span>{% endif %}</div>
+          <div class="mt-1">{{ d.status }}{% if d.is_online %} <span class="text-emerald-400">● online</span>{% endif %}</div>
         </div>
         <div class="rounded-lg border border-slate-800 bg-slate-900/60 p-3">
           <div class="text-xs uppercase text-slate-500">Kind</div>
@@ -34,6 +66,7 @@
         </div>
       </div>
 
+      {# ── Info + Owner ── #}
       <div class="grid md:grid-cols-2 gap-4">
         <div class="rounded-lg border border-slate-800 bg-slate-900/40 p-4 space-y-2 text-sm">
           <div><span class="text-slate-500">Hostname:</span> {{ d.hostname or "—" }}</div>
@@ -69,6 +102,52 @@
         </form>
       </div>
 
+      {# ── Network access ── #}
+      {% if policies %}
+      <section>
+        <h3 class="font-semibold mb-3">Network Access</h3>
+        <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+          {% for policy in policies %}
+            {% set is_allowed = policy.ssid in (d.allowed_ssids or []) %}
+            <div class="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2 gap-3">
+              <span class="text-sm truncate" title="{{ policy.ssid }}">{{ policy.ssid }}</span>
+              {% if is_allowed %}
+                <form hx-post="/devices/{{ d.mac }}/block-ssid"
+                      hx-target="#modal-root"
+                      hx-swap="innerHTML"
+                      hx-confirm="Block {{ d.name or d.mac }} from {{ policy.ssid }}?">
+                  <input type="hidden" name="ssid" value="{{ policy.ssid }}" />
+                  <input type="hidden" name="from_modal" value="1" />
+                  <input type="hidden" name="filter_status" value="{{ filter_status or '' }}" />
+                  <input type="hidden" name="filter_conn" value="{{ filter_conn or '' }}" />
+                  <input type="hidden" name="filter_owner" value="{{ filter_owner or '' }}" />
+                  <button type="submit"
+                          class="shrink-0 px-2 py-0.5 text-xs rounded border border-amber-500/40 text-amber-300 hover:bg-amber-500/10">
+                    Block
+                  </button>
+                </form>
+              {% else %}
+                <form hx-post="/devices/{{ d.mac }}/allow-ssid"
+                      hx-target="#modal-root"
+                      hx-swap="innerHTML">
+                  <input type="hidden" name="ssid" value="{{ policy.ssid }}" />
+                  <input type="hidden" name="from_modal" value="1" />
+                  <input type="hidden" name="filter_status" value="{{ filter_status or '' }}" />
+                  <input type="hidden" name="filter_conn" value="{{ filter_conn or '' }}" />
+                  <input type="hidden" name="filter_owner" value="{{ filter_owner or '' }}" />
+                  <button type="submit"
+                          class="shrink-0 px-2 py-0.5 text-xs rounded border border-sky-500/40 text-sky-300 hover:bg-sky-500/10">
+                    Allow
+                  </button>
+                </form>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
+
+      {# ── Recent History ── #}
       <section>
         <h3 class="font-semibold mb-2">Recent History</h3>
         <div class="overflow-x-auto rounded-lg border border-slate-800">
@@ -101,6 +180,7 @@
         </div>
       </section>
 
+      {# ── Recent Actions ── #}
       <section>
         <h3 class="font-semibold mb-2">Recent Actions</h3>
         <div class="overflow-x-auto rounded-lg border border-slate-800">
@@ -130,6 +210,7 @@
           </table>
         </div>
       </section>
+
     </div>
   </div>
 </div>

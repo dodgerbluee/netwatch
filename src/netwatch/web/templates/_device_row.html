@@ -16,21 +16,9 @@
     <span class="inline-block px-2 py-0.5 rounded-md border text-xs {{ badge }}">{{ d.status }}</span>
     {% if d.is_online %}<span class="ml-1 text-emerald-400">●</span>{% endif %}
   </td>
-  <td class="px-3 py-2 font-medium">
-    <span id="name-display-{{ d.mac | replace(':','-') }}">{{ d.name or "(unnamed)" }}</span>
-    <button class="ml-1 text-xs text-slate-500 hover:text-slate-300"
-            onclick="this.parentElement.querySelector('.name-edit').classList.toggle('hidden'); this.classList.add('hidden')">edit</button>
-    <form class="name-edit hidden inline-flex gap-1 mt-1"
-          hx-post="/devices/{{ d.mac }}/rename"
-          hx-target="#device-{{ d.mac | replace(':','-') }}"
-          hx-swap="outerHTML">
-      <input name="name" value="{{ d.name or '' }}" placeholder="Device name"
-             class="bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs w-36 font-mono" />
-      <button type="submit" class="px-1.5 py-0.5 text-xs rounded border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10">Save</button>
-    </form>
-  </td>
+  <td class="px-3 py-2 font-medium">{{ d.name or "(unnamed)" }}</td>
   <td class="px-3 py-2 font-mono text-xs text-slate-400">{{ d.mac }}</td>
-  <td class="px-3 py-2">{{ d.kind }}</td>
+  <td class="px-3 py-2 font-mono text-xs text-slate-400">{{ d.last_ip or "—" }}</td>
   <td class="px-3 py-2">{{ d.owner or "—" }}</td>
   <td class="px-3 py-2">
     <div>{{ d.last_ssid or "—" }}</div>
@@ -38,7 +26,7 @@
       Allowed: {{ (d.allowed_ssids or []) | join(", ") or "none" }}
     </div>
   </td>
-  <td class="px-3 py-2 text-slate-400">
+  <td class="px-3 py-2 text-slate-400 whitespace-nowrap">
     {{ d.last_seen_at | localtime }}
   </td>
   <td class="px-3 py-2 text-right space-x-1">
@@ -64,14 +52,6 @@
         hx-confirm="Mark {{ d.name or d.mac }} as unknown?"
       >Unapprove</button>
     {% endif %}
-    {% if d.status != "flagged" %}
-      <button
-        class="px-2 py-1 text-xs rounded-md border border-rose-500/40 text-rose-300 hover:bg-rose-500/10"
-        hx-post="/devices/{{ d.mac }}/flag"
-        hx-target="#device-{{ d.mac | replace(':','-') }}"
-        hx-swap="outerHTML"
-      >Flag</button>
-    {% endif %}
     {% if d.status == "blocked" %}
       <button
         class="px-2 py-1 text-xs rounded-md border border-slate-500/40 text-slate-200 hover:bg-slate-500/10"
@@ -86,31 +66,6 @@
         hx-target="#device-{{ d.mac | replace(':','-') }}"
         hx-swap="outerHTML"
       >Block</button>
-    {% endif %}
-    {% if policies %}
-      <div class="mt-1 flex flex-wrap justify-end gap-1">
-        {% for policy in policies %}
-          {% set is_allowed = policy.ssid in (d.allowed_ssids or []) %}
-          {% if is_allowed %}
-            <button
-              class="px-1.5 py-0.5 text-[11px] rounded border border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
-              hx-post="/devices/{{ d.mac }}/block-ssid"
-              hx-vals='{{ {"ssid": policy.ssid} | tojson }}'
-              hx-target="#device-{{ d.mac | replace(':','-') }}"
-              hx-swap="outerHTML"
-              hx-confirm="Block {{ d.name or d.mac }} from {{ policy.ssid }}?"
-            >Block {{ policy.ssid }}</button>
-          {% else %}
-            <button
-              class="px-1.5 py-0.5 text-[11px] rounded border border-sky-500/40 text-sky-300 hover:bg-sky-500/10"
-              hx-post="/devices/{{ d.mac }}/allow-ssid"
-              hx-vals='{{ {"ssid": policy.ssid} | tojson }}'
-              hx-target="#device-{{ d.mac | replace(':','-') }}"
-              hx-swap="outerHTML"
-            >Allow {{ policy.ssid }}</button>
-          {% endif %}
-        {% endfor %}
-      </div>
     {% endif %}
   </td>
 </tr>
