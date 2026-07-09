@@ -175,6 +175,7 @@ class Policy(Base):
     allow_kinds: Mapped[list[str]] = mapped_column(JSON, default=list)
     allow_owners: Mapped[list[str]] = mapped_column(JSON, default=list)
     auto_block_unknown: Mapped[bool] = mapped_column(Boolean, default=True)
+    block_wrong_ssid: Mapped[bool] = mapped_column(Boolean, default=False)
 
     description: Mapped[str] = mapped_column(Text, default="")
 

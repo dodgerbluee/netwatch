@@ -304,6 +304,7 @@ async def upsert_policy(
     allow_kinds: list[str],
     allow_owners: list[str],
     auto_block_unknown: bool,
+    block_wrong_ssid: bool = False,
     description: str = "",
 ) -> Policy:
     policy = await get_policy(session, ssid)
@@ -315,6 +316,7 @@ async def upsert_policy(
             allow_kinds=allow_kinds,
             allow_owners=allow_owners,
             auto_block_unknown=auto_block_unknown,
+            block_wrong_ssid=block_wrong_ssid,
             description=description,
         )
         session.add(policy)
@@ -324,6 +326,7 @@ async def upsert_policy(
         policy.allow_kinds = allow_kinds
         policy.allow_owners = allow_owners
         policy.auto_block_unknown = auto_block_unknown
+        policy.block_wrong_ssid = block_wrong_ssid
         policy.description = description
     await session.flush()
     return policy

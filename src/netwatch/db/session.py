@@ -89,6 +89,14 @@ def _add_missing_columns(conn: object) -> None:
             conn.execute(text("ALTER TABLE devices ADD COLUMN connection_type VARCHAR(16) DEFAULT 'unknown'"))  # type: ignore[union-attr]
             log.info("db.migrate.added_column", table="devices", column="connection_type")
         _canonicalize_mac_rows(conn, normalize_mac)
+
+        policy_cols = {
+            row[1]
+            for row in conn.execute(text("PRAGMA table_info(policies)")).fetchall()  # type: ignore[union-attr]
+        }
+        if "block_wrong_ssid" not in policy_cols:
+            conn.execute(text("ALTER TABLE policies ADD COLUMN block_wrong_ssid BOOLEAN DEFAULT 0"))  # type: ignore[union-attr]
+            log.info("db.migrate.added_column", table="policies", column="block_wrong_ssid")
     except Exception as exc:  # noqa: BLE001
         log.warning("db.migrate.failed", error=repr(exc))
 

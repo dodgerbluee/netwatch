@@ -77,9 +77,12 @@ def decide(
             # accepts the device's kind/owner, we treat it as allowed
             # implicitly (e.g., a personal device of an allowed owner).
             if not _policy_implicitly_allows(policy, device):
+                block = enforcement_enabled and bool(
+                    policy and policy.block_wrong_ssid
+                )
                 return Decision(
                     verdict=Verdict.NOTIFY_WRONG_SSID,
-                    should_block=False,
+                    should_block=block,
                     severity="warning",
                     reason=(
                         f"known device {device.mac} ({device.name}) joined "
