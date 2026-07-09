@@ -10,26 +10,15 @@
 </head>
 <body class="min-h-screen">
   <nav class="border-b border-slate-800 bg-slate-900/80 backdrop-blur">
-    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4 flex-wrap">
+    <div class="max-w-[90%] mx-auto px-4 py-3 flex items-center justify-between gap-4 flex-wrap">
       <a href="/" class="text-lg font-semibold tracking-tight">📡 netwatch</a>
       <div class="flex items-center gap-3 text-sm flex-wrap">
         <a href="/" class="hover:text-emerald-400">Devices</a>
+        <a href="/networks" class="hover:text-emerald-400">Networks</a>
         <a href="/policies" class="hover:text-emerald-400">Policies</a>
         <a href="/history" class="hover:text-emerald-400">History</a>
+        <a href="/mqtt" class="hover:text-emerald-400">MQTT</a>
         <a href="/settings" class="hover:text-emerald-400">Settings</a>
-
-        <button
-          class="px-2 py-1 rounded-md border border-slate-700 text-slate-300 hover:border-emerald-500/40 hover:text-emerald-300 text-xs"
-          hx-post="/sync/unifi-aliases"
-          hx-target="#sync-status"
-          hx-swap="innerHTML"
-          hx-indicator="#sync-spinner"
-          title="Sync names, online/offline, and blocked status from UniFi"
-        >
-          <span id="sync-spinner" class="htmx-indicator">⟳</span>
-          Sync UniFi
-        </button>
-        <span id="sync-status" class="text-xs text-slate-500"></span>
 
         <a
           href="/export"
@@ -97,13 +86,13 @@
     </div>
   </div>
 
-  <main class="max-w-7xl mx-auto px-4 py-6">
+  <main class="max-w-[90%] mx-auto px-4 py-6">
     {% block content %}{% endblock %}
   </main>
 
   <div id="modal-root"></div>
 
-  <footer class="max-w-7xl mx-auto px-4 py-6 text-xs text-slate-500">
+  <footer class="max-w-[90%] mx-auto px-4 py-6 text-xs text-slate-500">
     enforcement:
     {% if settings and settings.enforcement_enabled %}
       <span class="text-emerald-400">ON</span>

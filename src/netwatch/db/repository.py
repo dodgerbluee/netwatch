@@ -47,7 +47,7 @@ async def list_devices(
     online_only: bool = False,
     limit: int = 500,
 ) -> list[Device]:
-    stmt = select(Device).order_by(Device.last_seen_at.desc().nullslast())
+    stmt = select(Device).order_by(Device.is_online.desc(), Device.last_seen_at.desc().nullslast())
     if status is not None:
         stmt = stmt.where(Device.status == status)
     if connection_type is not None:
@@ -247,6 +247,36 @@ async def recent_sightings(
         stmt = stmt.where(Sighting.observed_at >= cutoff)
     res = await session.execute(stmt)
     return list(res.scalars().all())
+
+
+# ---------------------------------------------------------------------------
+# Actions
+# ---------------------------------------------------------------------------
+
+
+async def list_actions_with_names(
+    session: AsyncSession,
+    *,
+    limit: int = 200,
+) -> list[dict]:
+    """Return recent actions joined with device name for the MQTT history page."""
+    from sqlalchemy import String, cast, label
+    from sqlalchemy import func  # noqa: F401
+
+    stmt = (
+        select(
+            Action,
+            Device.name.label("device_name"),
+        )
+        .outerjoin(Device, Action.mac == Device.mac)
+        .order_by(Action.created_at.desc())
+        .limit(limit)
+    )
+    rows = (await session.execute(stmt)).all()
+    result = []
+    for action, device_name in rows:
+        result.append({"action": action, "device_name": device_name or ""})
+    return result
 
 
 # ---------------------------------------------------------------------------

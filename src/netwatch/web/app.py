@@ -148,7 +148,7 @@ def _install_auth_middleware(app: FastAPI, settings: Settings) -> None:
         return JSONResponse({"error": "login required"}, status_code=401)
 
 
-def _localtime_filter(dt: datetime | None, fmt: str = "%Y-%m-%d %H:%M") -> str:
+def _localtime_filter(dt: datetime | None, fmt: str = "%m/%d/%Y %I:%M%p") -> str:
     if dt is None:
         return "—"
     if dt.tzinfo is None:
@@ -266,6 +266,53 @@ def _register_routes(app: FastAPI) -> None:
             {"sightings": sightings, "filter_mac": mac or ""},
         )
 
+    @app.get("/networks", response_class=HTMLResponse)
+    async def networks_page(request: Request) -> HTMLResponse:
+        from netwatch.db.repository import list_policies
+
+        async with session_scope() as session:
+            all_devices = await list_devices(session)
+            policies = await list_policies(session)
+
+        # Build per-SSID buckets: {ssid: {"online": [...], "offline": [...]}}
+        networks: list[dict] = []
+        for policy in policies:
+            online = [
+                d for d in all_devices
+                if d.is_online and d.last_ssid == policy.ssid
+            ]
+            offline = [
+                d for d in all_devices
+                if not d.is_online
+                and d.status == DeviceStatus.KNOWN
+                and policy.ssid in (d.allowed_ssids or [])
+            ]
+            networks.append({"policy": policy, "online": online, "offline": offline})
+
+        wired = [
+            d for d in all_devices
+            if d.connection_type == "wired" and d.is_online
+        ]
+
+        return templates.TemplateResponse(
+            request,
+            "networks.html",
+            {"networks": networks, "wired": wired},
+        )
+
+    @app.get("/mqtt", response_class=HTMLResponse)
+    async def mqtt_page(request: Request) -> HTMLResponse:
+        from netwatch.db.repository import list_actions_with_names
+
+        async with session_scope() as session:
+            rows = await list_actions_with_names(session, limit=200)
+
+        return templates.TemplateResponse(
+            request,
+            "mqtt.html",
+            {"rows": rows},
+        )
+
     @app.get("/devices/{mac}/details", response_class=HTMLResponse)
     async def device_details(
         mac: str,
@@ -331,6 +378,10 @@ def _register_routes(app: FastAPI) -> None:
         mac: str,
         request: Request,
         ssid: str = Form(""),
+        from_modal: bool = Form(False),
+        filter_status: str = Form(""),
+        filter_conn: str = Form(""),
+        filter_owner: str = Form(""),
     ) -> HTMLResponse:
         mac = normalize_mac(mac)
         ssid = ssid.strip()
@@ -364,6 +415,12 @@ def _register_routes(app: FastAPI) -> None:
                     "unifi_ok": unifi_ok,
                 },
             )
+        if from_modal:
+            return await _device_detail_modal(
+                request, mac, templates,
+                filter_status=filter_status, filter_conn=filter_conn,
+                filter_owner=filter_owner, include_row_update=True,
+            )
         return await _device_row(request, mac, templates)
 
     @app.post("/devices/{mac}/block-ssid", response_class=HTMLResponse)
@@ -371,6 +428,10 @@ def _register_routes(app: FastAPI) -> None:
         mac: str,
         request: Request,
         ssid: str = Form(""),
+        from_modal: bool = Form(False),
+        filter_status: str = Form(""),
+        filter_conn: str = Form(""),
+        filter_owner: str = Form(""),
     ) -> HTMLResponse:
         mac = normalize_mac(mac)
         ssid = ssid.strip()
@@ -398,10 +459,24 @@ def _register_routes(app: FastAPI) -> None:
             await _block_client(settings, mac)
             async with session_scope() as session:
                 await set_status(session, mac, DeviceStatus.BLOCKED)
+        if from_modal:
+            return await _device_detail_modal(
+                request, mac, templates,
+                filter_status=filter_status, filter_conn=filter_conn,
+                filter_owner=filter_owner, include_row_update=True,
+            )
         return await _device_row(request, mac, templates)
 
     @app.post("/devices/{mac}/rename", response_class=HTMLResponse)
-    async def rename(mac: str, request: Request, name: str = Form("")) -> HTMLResponse:
+    async def rename(
+        mac: str,
+        request: Request,
+        name: str = Form(""),
+        from_modal: bool = Form(False),
+        filter_status: str = Form(""),
+        filter_conn: str = Form(""),
+        filter_owner: str = Form(""),
+    ) -> HTMLResponse:
         mac = normalize_mac(mac)
         new_name = name.strip()
         if not new_name:
@@ -417,6 +492,12 @@ def _register_routes(app: FastAPI) -> None:
                     await unifi.rename_client(mac, new_name)
             except Exception as exc:  # noqa: BLE001
                 log.warning("ui.rename.unifi_failed", mac=mac, error=repr(exc))
+        if from_modal:
+            return await _device_detail_modal(
+                request, mac, templates,
+                filter_status=filter_status, filter_conn=filter_conn,
+                filter_owner=filter_owner, include_row_update=True,
+            )
         return await _device_row(request, mac, templates)
 
     @app.post("/devices/{mac}/owner", response_class=HTMLResponse)

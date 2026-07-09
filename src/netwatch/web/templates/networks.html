@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Networks · netwatch{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-2xl font-bold">Networks</h1>
+  <div class="text-xs text-slate-500">
+    Click a device to open its details
+  </div>
+</div>
+
+<div class="space-y-6">
+
+  {% for net in networks %}
+    {% set policy = net.policy %}
+    {% set online = net.online %}
+    {% set offline = net.offline %}
+    {% set total_online = online | length %}
+
+    <div class="rounded-xl border border-slate-800 overflow-hidden">
+      {# Network header #}
+      <div class="flex items-center justify-between px-4 py-3 bg-slate-900/80 border-b border-slate-800">
+        <div class="flex items-center gap-3">
+          <span class="font-semibold text-sm">{{ policy.ssid }}</span>
+          {% if policy.internal_name %}
+            <span class="text-xs text-slate-500">{{ policy.internal_name }}</span>
+          {% endif %}
+          {% if policy.vlan %}
+            <span class="px-1.5 py-0.5 rounded text-[10px] font-mono border border-slate-700 text-slate-400">VLAN {{ policy.vlan }}</span>
+          {% endif %}
+        </div>
+        <div class="flex items-center gap-3 text-xs text-slate-400">
+          {% if total_online > 0 %}
+            <span class="flex items-center gap-1 text-emerald-400">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block"></span>
+              {{ total_online }} online
+            </span>
+          {% else %}
+            <span class="text-slate-600">no devices online</span>
+          {% endif %}
+          <span class="text-slate-600">·</span>
+          <span>
+            {% set kinds = policy.allow_kinds %}
+            {% set owners = policy.allow_owners %}
+            {% if kinds %}{{ kinds | join(", ") }}{% endif %}
+            {% if kinds and owners %} · {% endif %}
+            {% if owners %}{{ owners | join(", ") }}{% endif %}
+            {% if not kinds and not owners %}<span class="text-slate-600">no allow rules</span>{% endif %}
+          </span>
+          {% if policy.auto_block_unknown %}
+            <span class="px-1.5 py-0.5 rounded border border-rose-500/30 text-rose-400 text-[10px]">auto-block</span>
+          {% endif %}
+        </div>
+      </div>
+
+      {# Device grid #}
+      {% if online or offline %}
+        <div class="divide-y divide-slate-800/60">
+          {% for d in online %}
+            <div class="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-900/40 cursor-pointer"
+                 hx-get="/devices/{{ d.mac }}/details"
+                 hx-target="#modal-root"
+                 hx-swap="innerHTML">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
+              <span class="font-medium text-sm min-w-0 truncate">{{ d.name or "(unnamed)" }}</span>
+              {% set badge = {
+                'unapproved': 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+                'known':      'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+                'flagged':    'bg-rose-500/20 text-rose-300 border-rose-500/40',
+                'blocked':    'bg-slate-500/20 text-slate-300 border-slate-500/40',
+              }[d.status] %}
+              <span class="px-1.5 py-0.5 rounded border text-[10px] {{ badge }} shrink-0">{{ d.status }}</span>
+              <span class="text-xs text-slate-500 shrink-0">{{ d.owner or "—" }}</span>
+              <span class="ml-auto font-mono text-xs text-slate-500 shrink-0">{{ d.last_ip or "" }}</span>
+              <span class="font-mono text-[10px] text-slate-600 shrink-0 hidden sm:block">{{ d.mac }}</span>
+            </div>
+          {% endfor %}
+          {% for d in offline %}
+            <div class="flex items-center gap-3 px-4 py-2.5 opacity-50 hover:opacity-75 cursor-pointer"
+                 hx-get="/devices/{{ d.mac }}/details"
+                 hx-target="#modal-root"
+                 hx-swap="innerHTML">
+              <span class="w-2 h-2 rounded-full bg-slate-600 shrink-0"></span>
+              <span class="font-medium text-sm min-w-0 truncate text-slate-400">{{ d.name or "(unnamed)" }}</span>
+              <span class="px-1.5 py-0.5 rounded border text-[10px] bg-slate-800 text-slate-500 border-slate-700 shrink-0">offline</span>
+              <span class="text-xs text-slate-600 shrink-0">{{ d.owner or "—" }}</span>
+              <span class="ml-auto font-mono text-[10px] text-slate-600 shrink-0 hidden sm:block">{{ d.mac }}</span>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="px-4 py-5 text-sm text-slate-600 text-center">No devices on this network</div>
+      {% endif %}
+    </div>
+  {% endfor %}
+
+  {# Wired / unassigned #}
+  {% if wired %}
+  <div class="rounded-xl border border-slate-700/50 overflow-hidden">
+    <div class="flex items-center justify-between px-4 py-3 bg-slate-900/50 border-b border-slate-800">
+      <span class="font-semibold text-sm text-slate-300">Wired</span>
+      <span class="text-xs text-slate-400">{{ wired | length }} online</span>
+    </div>
+    <div class="divide-y divide-slate-800/60">
+      {% for d in wired %}
+        <div class="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-900/40 cursor-pointer"
+             hx-get="/devices/{{ d.mac }}/details"
+             hx-target="#modal-root"
+             hx-swap="innerHTML">
+          <span class="w-2 h-2 rounded-full bg-sky-400 shrink-0"></span>
+          <span class="font-medium text-sm min-w-0 truncate">{{ d.name or "(unnamed)" }}</span>
+          {% set badge = {
+            'unapproved': 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+            'known':      'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+            'flagged':    'bg-rose-500/20 text-rose-300 border-rose-500/40',
+            'blocked':    'bg-slate-500/20 text-slate-300 border-slate-500/40',
+          }[d.status] %}
+          <span class="px-1.5 py-0.5 rounded border text-[10px] {{ badge }} shrink-0">{{ d.status }}</span>
+          <span class="text-xs text-slate-500 shrink-0">{{ d.owner or "—" }}</span>
+          <span class="ml-auto font-mono text-xs text-slate-500 shrink-0">{{ d.last_ip or "" }}</span>
+          <span class="font-mono text-[10px] text-slate-600 shrink-0 hidden sm:block">{{ d.mac }}</span>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

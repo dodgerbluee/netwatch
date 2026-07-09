@@ -2,9 +2,9 @@
 {% block title %}Devices · netwatch{% endblock %}
 
 {% block content %}
-<div class="flex items-center justify-between mb-4">
+<div class="flex items-center justify-between mb-4 gap-4 flex-wrap">
   <h1 class="text-2xl font-bold">Devices</h1>
-  <div class="flex gap-2 text-sm flex-wrap">
+  <div class="flex gap-2 text-sm flex-wrap items-center">
     {% for s in ["", "unapproved", "known", "flagged", "blocked"] %}
       <a href="?status={{ s }}{% if filter_conn %}&conn={{ filter_conn | urlencode }}{% endif %}{% if filter_owner %}&owner={{ filter_owner | urlencode }}{% endif %}"
          class="px-3 py-1 rounded-md border
@@ -12,28 +12,38 @@
         {{ s or "all" }}
       </a>
     {% endfor %}
-    <span class="border-l border-slate-700 mx-1"></span>
+
+    <span class="border-l border-slate-700 mx-1 self-stretch"></span>
+
     {% for c in ["wired", "wireless"] %}
-      <a href="?conn={{ c }}{% if filter_status %}&status={{ filter_status | urlencode }}{% endif %}{% if filter_owner %}&owner={{ filter_owner | urlencode }}{% endif %}"
+      {% set active = filter_conn == c %}
+      <a href="?{% if not active %}conn={{ c | urlencode }}&{% endif %}{% if filter_status %}status={{ filter_status | urlencode }}&{% endif %}{% if filter_owner %}owner={{ filter_owner | urlencode }}{% endif %}"
          class="px-3 py-1 rounded-md border
-                {% if filter_conn == c %}border-sky-400 text-sky-300{% else %}border-slate-700 text-slate-300 hover:border-slate-500{% endif %}">
+                {% if active %}border-sky-400 text-sky-300{% else %}border-slate-700 text-slate-300 hover:border-slate-500{% endif %}">
         {{ c }}
       </a>
     {% endfor %}
-    <span class="border-l border-slate-700 mx-1"></span>
-    <form action="/" class="inline-flex items-center gap-1">
-      {% if filter_status %}<input type="hidden" name="status" value="{{ filter_status }}" />{% endif %}
-      {% if filter_conn %}<input type="hidden" name="conn" value="{{ filter_conn }}" />{% endif %}
-      <select name="owner"
-              onchange="this.form.submit()"
-              class="bg-slate-950 border rounded-md px-2 py-1 text-sm {% if filter_owner %}border-purple-400 text-purple-300{% else %}border-slate-700 text-slate-300{% endif %}">
-        <option value="">all owners</option>
-        <option value="__none__" {% if filter_owner == "__none__" %}selected{% endif %}>no owner</option>
-        {% for owner in owners %}
-          <option value="{{ owner }}" {% if filter_owner == owner %}selected{% endif %}>{{ owner }}</option>
-        {% endfor %}
-      </select>
-    </form>
+
+    <span class="border-l border-slate-700 mx-1 self-stretch"></span>
+
+    {% set owner_base = "?" + ("status=" + filter_status + "&" if filter_status else "") + ("conn=" + filter_conn + "&" if filter_conn else "") %}
+    <a href="{{ owner_base }}"
+       class="px-3 py-1 rounded-full border text-xs
+              {% if not filter_owner %}border-purple-400 text-purple-300{% else %}border-slate-700 text-slate-400 hover:border-slate-500{% endif %}">
+      all
+    </a>
+    <a href="{{ owner_base }}owner=__none__"
+       class="px-3 py-1 rounded-full border text-xs
+              {% if filter_owner == '__none__' %}border-purple-400 text-purple-300{% else %}border-slate-700 text-slate-400 hover:border-slate-500{% endif %}">
+      no owner
+    </a>
+    {% for owner in owners %}
+      <a href="{{ owner_base }}owner={{ owner | urlencode }}"
+         class="px-3 py-1 rounded-full border text-xs
+                {% if filter_owner == owner %}border-purple-400 text-purple-300{% else %}border-slate-700 text-slate-400 hover:border-slate-500{% endif %}">
+        {{ owner }}
+      </a>
+    {% endfor %}
   </div>
 </div>
 
@@ -44,7 +54,7 @@
         <th class="px-3 py-2 text-left">Status</th>
         <th class="px-3 py-2 text-left">Name</th>
         <th class="px-3 py-2 text-left">MAC</th>
-        <th class="px-3 py-2 text-left">Kind</th>
+        <th class="px-3 py-2 text-left">IP</th>
         <th class="px-3 py-2 text-left">Owner</th>
         <th class="px-3 py-2 text-left">Last SSID</th>
         <th class="px-3 py-2 text-left">Last Seen</th>
