@@ -1,7 +1,8 @@
 {# Renders one row. Used inline on the index page and as the htmx swap target. #}
 <tr id="device-{{ d.mac | replace(':','-') }}"
     class="hover:bg-slate-900/60 cursor-pointer"
-    hx-get="/devices/{{ d.mac }}/details{% if filter_status or filter_conn or filter_owner %}?{% if filter_status %}filter_status={{ filter_status | urlencode }}{% endif %}{% if filter_status and (filter_conn or filter_owner) %}&{% endif %}{% if filter_conn %}filter_conn={{ filter_conn | urlencode }}{% endif %}{% if filter_conn and filter_owner %}&{% endif %}{% if filter_owner %}filter_owner={{ filter_owner | urlencode }}{% endif %}{% endif %}"
+    {% set _fp = [] %}{% if filter_status %}{% set _fp = _fp + ['filter_status=' + filter_status | urlencode] %}{% endif %}{% if filter_conn %}{% set _fp = _fp + ['filter_conn=' + filter_conn | urlencode] %}{% endif %}{% if filter_owner %}{% set _fp = _fp + ['filter_owner=' + filter_owner | urlencode] %}{% endif %}{% if filter_online %}{% set _fp = _fp + ['filter_online=' + filter_online | urlencode] %}{% endif %}
+    hx-get="/devices/{{ d.mac }}/details{% if _fp %}?{{ _fp | join('&') }}{% endif %}"
     hx-target="#modal-root"
     hx-swap="innerHTML"
     hx-trigger="click[event.target.closest('button, form, input, a') == null]"

@@ -94,10 +94,13 @@
       {% for row in rows %}
         {% set a = row.action %}
         {% set device_name = row.device_name %}
-        <tr class="hover:bg-slate-900/40"
+        <tr class="hover:bg-slate-900/40 cursor-pointer"
             data-device="{{ (device_name ~ ' ' ~ a.mac) | lower }}"
             data-event="{{ a.kind | string }}"
-            data-network="{{ a.ssid or '' }}">
+            data-network="{{ a.ssid or '' }}"
+            hx-get="/devices/{{ a.mac }}/details"
+            hx-target="#modal-root"
+            hx-swap="innerHTML">
           <td class="px-4 py-2.5 text-slate-400 whitespace-nowrap text-xs">
             {{ a.created_at | localtime }}
           </td>

@@ -24,6 +24,7 @@
           <input type="hidden" name="filter_status" value="{{ filter_status or '' }}" />
           <input type="hidden" name="filter_conn" value="{{ filter_conn or '' }}" />
           <input type="hidden" name="filter_owner" value="{{ filter_owner or '' }}" />
+          <input type="hidden" name="filter_online" value="{{ filter_online or '' }}" />
           <input name="name" value="{{ d.name or '' }}" placeholder="Device name"
                  class="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-sm w-56" autofocus />
           <button type="submit"
@@ -44,7 +45,22 @@
       </button>
     </div>
 
-    <div class="p-5 space-y-5">
+    {# ── Tabs ── #}
+    <div class="flex border-b border-slate-800" id="modal-tabs">
+      <button type="button" data-tab="details"
+              class="px-5 py-2.5 text-sm font-medium border-b-2 border-emerald-400 text-emerald-300 transition-colors"
+              onclick="switchTab('details')">
+        Details
+      </button>
+      <button type="button" data-tab="mqtt"
+              class="px-5 py-2.5 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-colors"
+              onclick="switchTab('mqtt')">
+        MQTT History
+      </button>
+    </div>
+
+    {# ── Tab: Details ── #}
+    <div id="tab-details" class="p-5 space-y-5">
 
       {# ── Stats strip ── #}
       <div class="grid md:grid-cols-4 gap-3 text-sm">
@@ -83,6 +99,7 @@
           <input type="hidden" name="filter_status" value="{{ filter_status or '' }}" />
           <input type="hidden" name="filter_conn" value="{{ filter_conn or '' }}" />
           <input type="hidden" name="filter_owner" value="{{ filter_owner or '' }}" />
+          <input type="hidden" name="filter_online" value="{{ filter_online or '' }}" />
           <label class="block text-sm">
             <span class="text-slate-400">Owner</span>
             <input name="owner" value="{{ d.owner or '' }}" placeholder="Select or type a new owner"
@@ -117,6 +134,7 @@
               <input type="hidden" name="filter_status" value="{{ filter_status or '' }}" />
               <input type="hidden" name="filter_conn" value="{{ filter_conn or '' }}" />
               <input type="hidden" name="filter_owner" value="{{ filter_owner or '' }}" />
+              <input type="hidden" name="filter_online" value="{{ filter_online or '' }}" />
               <button type="submit"
                       class="px-2 py-0.5 text-xs rounded border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10">
                 Allow All
@@ -139,6 +157,7 @@
                   <input type="hidden" name="filter_status" value="{{ filter_status or '' }}" />
                   <input type="hidden" name="filter_conn" value="{{ filter_conn or '' }}" />
                   <input type="hidden" name="filter_owner" value="{{ filter_owner or '' }}" />
+                  <input type="hidden" name="filter_online" value="{{ filter_online or '' }}" />
                   <button type="submit"
                           class="shrink-0 px-2 py-0.5 text-xs rounded border border-amber-500/40 text-amber-300 hover:bg-amber-500/10">
                     Block
@@ -153,6 +172,7 @@
                   <input type="hidden" name="filter_status" value="{{ filter_status or '' }}" />
                   <input type="hidden" name="filter_conn" value="{{ filter_conn or '' }}" />
                   <input type="hidden" name="filter_owner" value="{{ filter_owner or '' }}" />
+                  <input type="hidden" name="filter_online" value="{{ filter_online or '' }}" />
                   <button type="submit"
                           class="shrink-0 px-2 py-0.5 text-xs rounded border border-sky-500/40 text-sky-300 hover:bg-sky-500/10">
                     Allow
@@ -198,37 +218,72 @@
         </div>
       </section>
 
-      {# ── Recent Actions ── #}
-      <section>
-        <h3 class="font-semibold mb-2">Recent Actions</h3>
-        <div class="overflow-x-auto rounded-lg border border-slate-800">
-          <table class="min-w-full text-xs">
-            <thead class="bg-slate-900 text-slate-400 uppercase">
-              <tr>
-                <th class="px-3 py-2 text-left">When</th>
-                <th class="px-3 py-2 text-left">Kind</th>
-                <th class="px-3 py-2 text-left">Result</th>
-                <th class="px-3 py-2 text-left">SSID</th>
-                <th class="px-3 py-2 text-left">Reason</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-800">
-              {% for a in actions %}
-                <tr>
-                  <td class="px-3 py-2 text-slate-400 whitespace-nowrap">{{ a.created_at | localtime("%Y-%m-%d %H:%M:%S") }}</td>
-                  <td class="px-3 py-2">{{ a.kind }}</td>
-                  <td class="px-3 py-2">{{ a.result }}</td>
-                  <td class="px-3 py-2">{{ a.ssid or "—" }}</td>
-                  <td class="px-3 py-2 text-slate-300">{{ a.reason }}</td>
-                </tr>
-              {% else %}
-                <tr><td colspan="5" class="px-3 py-6 text-center text-slate-500">No actions yet.</td></tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
     </div>
+
+    {# ── Tab: MQTT History ── #}
+    {% set kind_styles = {
+      'block':            'bg-rose-500/20 text-rose-300 border-rose-500/40',
+      'unblock':          'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+      'approve':          'bg-sky-500/20 text-sky-300 border-sky-500/40',
+      'notify':           'bg-amber-500/20 text-amber-300 border-amber-500/40',
+      'policy_violation': 'bg-purple-500/20 text-purple-300 border-purple-500/40',
+    } %}
+    {% set result_styles = {
+      'ok':      'text-emerald-400',
+      'failed':  'text-rose-400',
+      'skipped': 'text-slate-500',
+    } %}
+    <div id="tab-mqtt" class="p-5 space-y-5 hidden">
+      <div class="overflow-x-auto rounded-lg border border-slate-800">
+        <table class="min-w-full text-xs">
+          <thead class="bg-slate-900 text-slate-400 uppercase">
+            <tr>
+              <th class="px-3 py-2 text-left">When</th>
+              <th class="px-3 py-2 text-left">Event</th>
+              <th class="px-3 py-2 text-left">Result</th>
+              <th class="px-3 py-2 text-left">Network</th>
+              <th class="px-3 py-2 text-left">Reason</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800">
+            {% for a in actions %}
+              <tr>
+                <td class="px-3 py-2 text-slate-400 whitespace-nowrap">{{ a.created_at | localtime("%Y-%m-%d %H:%M:%S") }}</td>
+                <td class="px-3 py-2">
+                  <span class="inline-block px-2 py-0.5 rounded border text-xs
+                               {{ kind_styles.get(a.kind | string, 'border-slate-700 text-slate-400') }}">
+                    {{ a.kind }}
+                  </span>
+                </td>
+                <td class="px-3 py-2 text-xs font-medium {{ result_styles.get(a.result | string, 'text-slate-400') }}">
+                  {{ a.result }}
+                </td>
+                <td class="px-3 py-2">{{ a.ssid or "—" }}</td>
+                <td class="px-3 py-2 text-slate-300 max-w-xs">
+                  <div class="truncate" title="{{ a.reason }}">{{ a.reason or "—" }}</div>
+                </td>
+              </tr>
+            {% else %}
+              <tr><td colspan="5" class="px-3 py-6 text-center text-slate-500">No MQTT events for this device.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <script>
+    function switchTab(tab) {
+      document.getElementById('tab-details').classList.toggle('hidden', tab !== 'details');
+      document.getElementById('tab-mqtt').classList.toggle('hidden', tab !== 'mqtt');
+      document.querySelectorAll('#modal-tabs button').forEach(function(btn) {
+        var isActive = btn.dataset.tab === tab;
+        btn.classList.toggle('border-emerald-400', isActive);
+        btn.classList.toggle('text-emerald-300', isActive);
+        btn.classList.toggle('border-transparent', !isActive);
+        btn.classList.toggle('text-slate-400', !isActive);
+      });
+    }
+    </script>
+
   </div>
 </div>

@@ -217,16 +217,23 @@ def _register_routes(app: FastAPI) -> None:
         status: str | None = None,
         conn: str | None = None,
         owner: str | None = None,
+        online: str | None = None,
     ) -> HTMLResponse:
         from netwatch.db.models import ConnectionType
 
         effective = status if status is not None else ""
+        online_filter = None
+        if online == "online":
+            online_filter = True
+        elif online == "offline":
+            online_filter = False
         async with session_scope() as session:
             devices = await list_devices(
                 session,
                 status=DeviceStatus(effective) if effective else None,
                 connection_type=ConnectionType(conn) if conn else None,
                 owner=owner if owner else None,
+                online=online_filter,
             )
             policies = await list_policies(session)
             owners = await list_owners(session)
@@ -240,6 +247,7 @@ def _register_routes(app: FastAPI) -> None:
                 "filter_status": effective,
                 "filter_conn": conn or "",
                 "filter_owner": owner or "",
+                "filter_online": online or "",
                 "settings": settings,
                 "DeviceKind": DeviceKind,
                 "DeviceStatus": DeviceStatus,
@@ -322,6 +330,7 @@ def _register_routes(app: FastAPI) -> None:
         filter_status: str = "",
         filter_conn: str = "",
         filter_owner: str = "",
+        filter_online: str = "",
     ) -> HTMLResponse:
         return await _device_detail_modal(
             request,
@@ -330,6 +339,7 @@ def _register_routes(app: FastAPI) -> None:
             filter_status=filter_status,
             filter_conn=filter_conn,
             filter_owner=filter_owner,
+            filter_online=filter_online,
         )
 
     # ----- Device mutations ---------------------------------------------
@@ -384,6 +394,7 @@ def _register_routes(app: FastAPI) -> None:
         filter_status: str = Form(""),
         filter_conn: str = Form(""),
         filter_owner: str = Form(""),
+        filter_online: str = Form(""),
     ) -> HTMLResponse:
         mac = normalize_mac(mac)
         ssid = ssid.strip()
@@ -421,7 +432,8 @@ def _register_routes(app: FastAPI) -> None:
             return await _device_detail_modal(
                 request, mac, templates,
                 filter_status=filter_status, filter_conn=filter_conn,
-                filter_owner=filter_owner, include_row_update=True,
+                filter_owner=filter_owner, filter_online=filter_online,
+                include_row_update=True,
             )
         return await _device_row(request, mac, templates)
 
@@ -434,6 +446,7 @@ def _register_routes(app: FastAPI) -> None:
         filter_status: str = Form(""),
         filter_conn: str = Form(""),
         filter_owner: str = Form(""),
+        filter_online: str = Form(""),
     ) -> HTMLResponse:
         mac = normalize_mac(mac)
         ssid = ssid.strip()
@@ -465,7 +478,8 @@ def _register_routes(app: FastAPI) -> None:
             return await _device_detail_modal(
                 request, mac, templates,
                 filter_status=filter_status, filter_conn=filter_conn,
-                filter_owner=filter_owner, include_row_update=True,
+                filter_owner=filter_owner, filter_online=filter_online,
+                include_row_update=True,
             )
         return await _device_row(request, mac, templates)
 
@@ -478,6 +492,7 @@ def _register_routes(app: FastAPI) -> None:
         filter_status: str = Form(""),
         filter_conn: str = Form(""),
         filter_owner: str = Form(""),
+        filter_online: str = Form(""),
     ) -> HTMLResponse:
         mac = normalize_mac(mac)
         new_name = name.strip()
@@ -498,7 +513,8 @@ def _register_routes(app: FastAPI) -> None:
             return await _device_detail_modal(
                 request, mac, templates,
                 filter_status=filter_status, filter_conn=filter_conn,
-                filter_owner=filter_owner, include_row_update=True,
+                filter_owner=filter_owner, filter_online=filter_online,
+                include_row_update=True,
             )
         return await _device_row(request, mac, templates)
 
@@ -510,6 +526,7 @@ def _register_routes(app: FastAPI) -> None:
         filter_status: str = Form(""),
         filter_conn: str = Form(""),
         filter_owner: str = Form(""),
+        filter_online: str = Form(""),
     ) -> HTMLResponse:
         mac = normalize_mac(mac)
         async with session_scope() as session:
@@ -524,6 +541,7 @@ def _register_routes(app: FastAPI) -> None:
             filter_status=filter_status,
             filter_conn=filter_conn,
             filter_owner=filter_owner,
+            filter_online=filter_online,
             include_row_update=True,
         )
 
@@ -562,6 +580,7 @@ def _register_routes(app: FastAPI) -> None:
         filter_status: str = Form(""),
         filter_conn: str = Form(""),
         filter_owner: str = Form(""),
+        filter_online: str = Form(""),
     ) -> HTMLResponse:
         mac = normalize_mac(mac)
         async with session_scope() as session:
@@ -584,7 +603,8 @@ def _register_routes(app: FastAPI) -> None:
             return await _device_detail_modal(
                 request, mac, templates,
                 filter_status=filter_status, filter_conn=filter_conn,
-                filter_owner=filter_owner, include_row_update=True,
+                filter_owner=filter_owner, filter_online=filter_online,
+                include_row_update=True,
             )
         return await _device_row(request, mac, templates)
 
@@ -882,6 +902,7 @@ async def _device_row(request: Request, mac: str, templates: Jinja2Templates) ->
             "filter_status": "",
             "filter_conn": "",
             "filter_owner": "",
+            "filter_online": "",
         },
     )
 
@@ -894,6 +915,7 @@ async def _device_detail_modal(
     filter_status: str = "",
     filter_conn: str = "",
     filter_owner: str = "",
+    filter_online: str = "",
     include_row_update: bool = False,
 ) -> HTMLResponse:
     """Return the device details modal fragment."""
@@ -923,6 +945,7 @@ async def _device_detail_modal(
         status=filter_status,
         connection_type=filter_conn,
         owner=filter_owner,
+        online=filter_online,
     )
     return templates.TemplateResponse(
         request,
@@ -936,6 +959,7 @@ async def _device_detail_modal(
             "filter_status": filter_status,
             "filter_conn": filter_conn,
             "filter_owner": filter_owner,
+            "filter_online": filter_online,
             "row_visible": row_visible,
         },
     )
@@ -947,6 +971,7 @@ def _matches_device_filters(
     status: str,
     connection_type: str,
     owner: str,
+    online: str = "",
 ) -> bool:
     if status and device.status != status:
         return False
@@ -955,6 +980,10 @@ def _matches_device_filters(
     if owner == "__none__":
         return not device.owner
     if owner and device.owner != owner:
+        return False
+    if online == "online" and not device.is_online:
+        return False
+    if online == "offline" and device.is_online:
         return False
     return True
 

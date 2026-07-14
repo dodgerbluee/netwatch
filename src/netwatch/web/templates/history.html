@@ -25,7 +25,12 @@
     </thead>
     <tbody class="divide-y divide-slate-800">
       {% for s in sightings %}
-      <tr class="hover:bg-slate-900/60">
+      <tr class="hover:bg-slate-900/60{% if s.device %} cursor-pointer{% endif %}"
+          {% if s.device %}
+          hx-get="/devices/{{ s.mac }}/details"
+          hx-target="#modal-root"
+          hx-swap="innerHTML"
+          {% endif %}>
         <td class="px-3 py-2 text-slate-400 whitespace-nowrap">{{ s.observed_at | localtime("%Y-%m-%d %H:%M:%S") }}</td>
         <td class="px-3 py-2">{{ s.event }}</td>
         <td class="px-3 py-2">{{ s.device.name if s.device else "—" }}</td>

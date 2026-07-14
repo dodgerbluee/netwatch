@@ -45,6 +45,7 @@ async def list_devices(
     connection_type: ConnectionType | None = None,
     owner: str | None = None,
     online_only: bool = False,
+    online: bool | None = None,
     limit: int = 500,
 ) -> list[Device]:
     stmt = select(Device).order_by(Device.is_online.desc(), Device.last_seen_at.desc().nullslast())
@@ -59,6 +60,8 @@ async def list_devices(
             stmt = stmt.where(Device.owner == owner)
     if online_only:
         stmt = stmt.where(Device.is_online.is_(True))
+    if online is not None:
+        stmt = stmt.where(Device.is_online.is_(online))
     stmt = stmt.limit(limit)
     res = await session.execute(stmt)
     return list(res.scalars().all())
