@@ -5,8 +5,8 @@
 <div class="flex items-center justify-between mb-4 gap-4 flex-wrap">
   <h1 class="text-2xl font-bold">Devices</h1>
   <div class="flex gap-2 text-sm flex-wrap items-center">
-    {% for s in ["", "unapproved", "known", "flagged"] %}
-      <a href="?status={{ s }}{% if filter_conn %}&conn={{ filter_conn | urlencode }}{% endif %}{% if filter_owner %}&owner={{ filter_owner | urlencode }}{% endif %}"
+    {% for s in ["", "unapproved", "known", "blocked"] %}
+      <a href="?status={{ s }}{% if filter_conn %}&conn={{ filter_conn | urlencode }}{% endif %}{% if filter_owner %}&owner={{ filter_owner | urlencode }}{% endif %}{% if filter_online %}&online={{ filter_online | urlencode }}{% endif %}"
          class="px-3 py-1 rounded-md border
                  {% if filter_status == s %}border-emerald-400 text-emerald-300{% else %}border-slate-700 text-slate-300 hover:border-slate-500{% endif %}">
         {{ s or "all" }}
@@ -21,6 +21,7 @@
       {% if not active %}{% set _parts = _parts + ['conn=' + c | urlencode] %}{% endif %}
       {% if filter_status %}{% set _parts = _parts + ['status=' + filter_status | urlencode] %}{% endif %}
       {% if filter_owner %}{% set _parts = _parts + ['owner=' + filter_owner | urlencode] %}{% endif %}
+      {% if filter_online %}{% set _parts = _parts + ['online=' + filter_online | urlencode] %}{% endif %}
       <a href="?{{ _parts | join('&') }}"
          class="px-3 py-1 rounded-md border
                 {% if active %}border-sky-400 text-sky-300{% else %}border-slate-700 text-slate-300 hover:border-slate-500{% endif %}">
@@ -30,27 +31,38 @@
 
     <span class="border-l border-slate-700 mx-1 self-stretch"></span>
 
-    {% set _base = [] %}
-    {% if filter_status %}{% set _base = _base + ['status=' + filter_status | urlencode] %}{% endif %}
-    {% if filter_conn %}{% set _base = _base + ['conn=' + filter_conn | urlencode] %}{% endif %}
-    {% set owner_base = '?' + (_base | join('&') + '&' if _base else '') %}
-    <a href="{{ owner_base }}"
-       class="px-3 py-1 rounded-full border text-xs
-              {% if not filter_owner %}border-purple-400 text-purple-300{% else %}border-slate-700 text-slate-400 hover:border-slate-500{% endif %}">
-      all
-    </a>
-    <a href="{{ owner_base }}owner=__none__"
-       class="px-3 py-1 rounded-full border text-xs
-              {% if filter_owner == '__none__' %}border-purple-400 text-purple-300{% else %}border-slate-700 text-slate-400 hover:border-slate-500{% endif %}">
-      no owner
-    </a>
-    {% for owner in owners %}
-      <a href="{{ owner_base }}owner={{ owner | urlencode }}"
-         class="px-3 py-1 rounded-full border text-xs
-                {% if filter_owner == owner %}border-purple-400 text-purple-300{% else %}border-slate-700 text-slate-400 hover:border-slate-500{% endif %}">
-        {{ owner }}
+    {% for o in ["online", "offline"] %}
+      {% set active = filter_online == o %}
+      {% set _parts = [] %}
+      {% if not active %}{% set _parts = _parts + ['online=' + o] %}{% endif %}
+      {% if filter_status %}{% set _parts = _parts + ['status=' + filter_status | urlencode] %}{% endif %}
+      {% if filter_conn %}{% set _parts = _parts + ['conn=' + filter_conn | urlencode] %}{% endif %}
+      {% if filter_owner %}{% set _parts = _parts + ['owner=' + filter_owner | urlencode] %}{% endif %}
+      <a href="?{{ _parts | join('&') }}"
+         class="px-3 py-1 rounded-md border
+                {% if active %}border-cyan-400 text-cyan-300{% else %}border-slate-700 text-slate-300 hover:border-slate-500{% endif %}">
+        {{ o }}
       </a>
     {% endfor %}
+
+    <span class="border-l border-slate-700 mx-1 self-stretch"></span>
+
+    <div class="flex flex-col gap-1">
+      <label class="text-[10px] uppercase tracking-wide text-slate-500 font-medium">Owner</label>
+      <div class="relative">
+        <select id="owner-filter"
+                class="appearance-none bg-slate-950 border border-slate-700 rounded-lg pl-3 pr-8 py-2 text-sm
+                       focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20 focus:outline-none cursor-pointer transition-colors"
+                onchange="const p=new URLSearchParams(window.location.search);if(this.value){p.set('owner',this.value)}else{p.delete('owner')};window.location='?'+p.toString()">
+          <option value=""{% if not filter_owner %} selected{% endif %}>All owners</option>
+          <option value="__none__"{% if filter_owner == '__none__' %} selected{% endif %}>No owner</option>
+          {% for owner in owners %}
+            <option value="{{ owner }}"{% if filter_owner == owner %} selected{% endif %}>{{ owner }}</option>
+          {% endfor %}
+        </select>
+        <svg class="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+      </div>
+    </div>
   </div>
 </div>
 
