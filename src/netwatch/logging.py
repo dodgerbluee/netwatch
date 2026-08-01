@@ -61,8 +61,21 @@ def configure_logging(level: str = "INFO") -> None:
     root.addHandler(handler)
     root.setLevel(getattr(logging, level.upper(), logging.INFO))
 
-    # Quiet down chatty libs.
-    for noisy in ("uvicorn.access", "sqlalchemy.engine.Engine", "httpx", "httpcore"):
+    # Quiet down chatty libs. These stay at WARNING even when netwatch itself
+    # runs at DEBUG: aiosqlite logs every cursor operation, and the websockets
+    # DEBUG stream dumps full handshake headers — including the UniFi session
+    # cookie — into the container log.
+    for noisy in (
+        "uvicorn.access",
+        "sqlalchemy",
+        "sqlalchemy.engine.Engine",
+        "aiosqlite",
+        "websockets",
+        "websockets.client",
+        "websockets.protocol",
+        "httpx",
+        "httpcore",
+    ):
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
 

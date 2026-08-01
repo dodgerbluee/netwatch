@@ -183,6 +183,12 @@
                  value="{{ '__unchanged__' if settings.opnsense.api_secret else '' }}"
                  class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 font-mono" />
         </label>
+        <label class="block">
+          <span class="text-slate-400">Poll interval (seconds)</span>
+          <input type="number" name="poll_interval_seconds" min="30"
+                 value="{{ settings.opnsense.poll_interval_seconds }}"
+                 class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 font-mono" />
+        </label>
         <label class="inline-flex items-center gap-2">
           <input type="checkbox" name="verify_tls"
                  {{ 'checked' if settings.opnsense.verify_tls else '' }} />

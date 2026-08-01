@@ -30,6 +30,11 @@ log = get_logger(__name__)
 # MACs to always ignore (broadcast, multicast, gateway).
 _IGNORE_PREFIXES = ("ff:ff:ff", "01:00:5e", "33:33:")
 
+# An ARP entry ages out whenever a device is merely idle, so a single missed
+# poll says nothing about reachability. Only call a device gone once it has
+# been absent from this many consecutive polls.
+MISSED_POLLS_BEFORE_OFFLINE = 3
+
 
 def _is_ignorable(mac: str) -> bool:
     return any(mac.startswith(p) for p in _IGNORE_PREFIXES)
@@ -37,37 +42,55 @@ def _is_ignorable(mac: str) -> bool:
 
 async def run_opnsense_poller(settings: Settings) -> None:
     """Entry point for the supervisor."""
-    interval = 30
+    interval = settings.opnsense.poll_interval_seconds
     previous_macs: set[str] = set()
+    # mac -> number of consecutive polls it has been missing from ARP.
+    missed: dict[str, int] = {}
 
     while True:
+        # One client for many polls: a fresh TLS handshake and auth round
+        # trip every cycle is pure load on the firewall. Rebuilt on error.
         try:
-            current_macs, hostname_map, ip_map = await _poll_once(settings)
-            new = current_macs - previous_macs
-            gone = previous_macs - current_macs
+            async with OPNsenseClient(settings.opnsense) as client:
+                while True:
+                    current_macs, hostname_map, ip_map = await _poll_once(client)
 
-            if new:
-                await _handle_connected(new, hostname_map, ip_map)
-            if gone:
-                await _handle_disconnected(gone)
+                    new = current_macs - previous_macs
+                    for mac in current_macs:
+                        missed.pop(mac, None)
 
-            previous_macs = current_macs
+                    absent = previous_macs - current_macs
+                    gone: set[str] = set()
+                    for mac in absent:
+                        missed[mac] = missed.get(mac, 0) + 1
+                        if missed[mac] >= MISSED_POLLS_BEFORE_OFFLINE:
+                            gone.add(mac)
+                            del missed[mac]
+
+                    if new:
+                        await _handle_connected(new, hostname_map, ip_map)
+                    if gone:
+                        await _handle_disconnected(gone)
+
+                    # Devices still inside the grace window stay "present" so
+                    # a reappearance isn't reported as a fresh connect.
+                    previous_macs = current_macs | (absent - gone)
+
+                    await asyncio.sleep(interval)
         except Exception as exc:  # noqa: BLE001
             log.warning("opnsense.poll.failed", error=repr(exc))
-
-        await asyncio.sleep(interval)
+            await asyncio.sleep(interval)
 
 
 async def _poll_once(
-    settings: Settings,
+    client: OPNsenseClient,
 ) -> tuple[set[str], dict[str, str], dict[str, str]]:
     """Poll ARP + DHCP, return (active_macs, hostname_map, ip_map).
 
     Filters out wireless MACs (already tracked by UniFi).
     """
-    async with OPNsenseClient(settings.opnsense) as client:
-        arp_entries = await client.get_arp_table()
-        dhcp_leases = await client.get_dhcp_leases()
+    arp_entries = await client.get_arp_table()
+    dhcp_leases = await client.get_dhcp_leases()
 
     # Build hostname lookup from DHCP leases.
     hostname_map: dict[str, str] = {}

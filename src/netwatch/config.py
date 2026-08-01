@@ -129,6 +129,7 @@ class OPNsenseConfig:
     api_key: str = ""
     api_secret: str = ""
     verify_tls: bool = False
+    poll_interval_seconds: int = 120
 
     @property
     def enabled(self) -> bool:
@@ -140,6 +141,7 @@ class OPNsenseConfig:
             "api_key": self.api_key,
             "api_secret": self.api_secret,
             "verify_tls": self.verify_tls,
+            "poll_interval_seconds": self.poll_interval_seconds,
         }
 
     @classmethod
@@ -149,6 +151,7 @@ class OPNsenseConfig:
             api_key=d.get("api_key", ""),
             api_secret=d.get("api_secret", ""),
             verify_tls=bool(d.get("verify_tls", False)),
+            poll_interval_seconds=max(30, int(d.get("poll_interval_seconds", 120))),
         )
 
 

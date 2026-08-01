@@ -497,6 +497,7 @@ def build_router(*, settings: Settings, templates: Jinja2Templates) -> APIRouter
         api_key: Annotated[str, Form()] = "",
         api_secret: Annotated[str, Form()] = "",
         verify_tls: Annotated[bool, Form()] = False,
+        poll_interval_seconds: Annotated[int, Form()] = 120,
     ) -> HTMLResponse:
         if not admin.is_admin:
             raise HTTPException(403)
@@ -509,6 +510,7 @@ def build_router(*, settings: Settings, templates: Jinja2Templates) -> APIRouter
             api_key=api_key.strip(),
             api_secret=api_secret,
             verify_tls=verify_tls,
+            poll_interval_seconds=max(30, poll_interval_seconds),
         )
         await settings.save_section("opnsense", cfg.to_dict())
         supervisor = request.app.state.supervisor

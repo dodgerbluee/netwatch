@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from sqlalchemy import update
 
 from netwatch.config import Settings
-from netwatch.db.models import Device, DeviceStatus
+from netwatch.db.models import ConnectionType, Device, DeviceStatus
 from netwatch.db.repository import sync_unifi_alias
 from netwatch.db.session import session_scope
 from netwatch.logging import get_logger
@@ -79,6 +79,12 @@ async def full_sync(settings: Settings) -> SyncResult:
         all_devices = (await session.execute(select(Device))).scalars().all()
         for device in all_devices:
             is_active = device.mac in active_macs
+            # active_macs only ever holds UniFi *wireless* associations, so a
+            # wired device is always absent from it. Marking those offline
+            # here would undo what the OPNsense poller just recorded — the two
+            # subsystems would flip the same rows against each other forever.
+            if not is_active and device.connection_type == ConnectionType.WIRED:
+                continue
             if device.is_online != is_active:
                 device.is_online = is_active
                 if is_active:

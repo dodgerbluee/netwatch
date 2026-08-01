@@ -22,7 +22,7 @@ import websockets
 from tenacity import (
     AsyncRetrying,
     retry_if_exception_type,
-    stop_after_attempt,
+    stop_never,
     wait_exponential,
 )
 
@@ -233,7 +233,7 @@ class UnifiClient:
 
         async for attempt in AsyncRetrying(
             wait=wait_exponential(multiplier=1, min=2, max=60),
-            stop=stop_after_attempt(0),  # forever
+            stop=stop_never,
             retry=retry_if_exception_type(Exception),
             reraise=True,
         ):
