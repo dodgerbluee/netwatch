@@ -65,8 +65,8 @@
       {# ── Stats strip ── #}
       <div class="grid md:grid-cols-4 gap-3 text-sm">
         <div class="rounded-lg border border-slate-800 bg-slate-900/60 p-3">
-          <div class="text-xs uppercase text-slate-500">Approval / UniFi</div>
-          <div class="mt-1">{{ d.status }} / {{ "blocked" if d.is_blocked else "unblocked" }}{% if d.is_online %} <span class="text-emerald-400">● online</span>{% endif %}</div>
+          <div class="text-xs uppercase text-slate-500">Status</div>
+          <div class="mt-1">{{ d.status }}{% if d.is_online %} <span class="text-emerald-400">● online</span>{% endif %}</div>
         </div>
         <div class="rounded-lg border border-slate-800 bg-slate-900/60 p-3">
           <div class="text-xs uppercase text-slate-500">Kind</div>

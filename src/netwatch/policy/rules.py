@@ -14,11 +14,11 @@ from netwatch.unifi.events import NetworkEvent
 
 
 class Verdict(StrEnum):
-    ALLOW = "allow"  # do nothing
+    ALLOW = "allow"                  # do nothing
     NOTIFY_UNKNOWN = "notify_unknown"
     NOTIFY_WRONG_SSID = "notify_wrong_ssid"
     NOTIFY_FLAGGED = "notify_flagged"
-    REBLOCK = "reblock"  # blocked device re-associated; re-enforce, no alert
+    REBLOCK = "reblock"              # blocked device re-associated; re-enforce, no alert
 
 
 # Verdicts that warrant a user-facing notification.
@@ -31,7 +31,7 @@ NOTIFY_VERDICTS = frozenset(
 class Decision:
     verdict: Verdict
     should_block: bool
-    severity: str  # "info" | "warning" | "critical"
+    severity: str        # "info" | "warning" | "critical"
     reason: str
 
 
@@ -47,16 +47,6 @@ def decide(
     The caller is responsible for actually performing the side effects
     (block, notify, log).
     """
-
-    # A blocked station retry is already handled; don't turn retries into
-    # repeated unknown/flagged alerts.
-    if device.is_blocked:
-        return Decision(
-            verdict=Verdict.REBLOCK,
-            should_block=enforcement_enabled,
-            severity="info",
-            reason=f"blocked device {device.mac} re-associated to {event.ssid!r}",
-        )
 
     # ---- 1. Flagged trumps everything ----------------------------------
     if device.status == DeviceStatus.FLAGGED:
@@ -87,7 +77,9 @@ def decide(
             # accepts the device's kind/owner, we treat it as allowed
             # implicitly (e.g., a personal device of an allowed owner).
             if not _policy_implicitly_allows(policy, device):
-                block = enforcement_enabled and bool(policy and policy.block_wrong_ssid)
+                block = enforcement_enabled and bool(
+                    policy and policy.block_wrong_ssid
+                )
                 return Decision(
                     verdict=Verdict.NOTIFY_WRONG_SSID,
                     should_block=block,
@@ -97,6 +89,18 @@ def decide(
                         f"{event.ssid!r}, allowed: {device.allowed_ssids}"
                     ),
                 )
+
+    # ---- 4. Already-blocked device that somehow associated ------------
+    if device.status == DeviceStatus.BLOCKED:
+        # Re-issue the block (UniFi may have lost the rule across a
+        # firmware restore or a manual unblock), but blocked clients retry
+        # association constantly — a retry is not a fresh alert.
+        return Decision(
+            verdict=Verdict.REBLOCK,
+            should_block=enforcement_enabled,
+            severity="info",
+            reason=f"blocked device {device.mac} re-associated to {event.ssid!r}",
+        )
 
     return Decision(
         verdict=Verdict.ALLOW,

@@ -59,7 +59,6 @@ def make_device(mac: str):
         owner: str = "",
         allowed_ssids: list[str] | None = None,
         name: str = "test",
-        is_blocked: bool = False,
     ) -> Device:
         return Device(
             mac=mac,
@@ -69,7 +68,6 @@ def make_device(mac: str):
             owner=owner,
             status=status,
             allowed_ssids=allowed_ssids or [],
-            is_blocked=is_blocked,
         )
 
     return _factory

@@ -54,8 +54,9 @@ class DeviceKind(StrEnum):
 
 class DeviceStatus(StrEnum):
     UNAPPROVED = "unapproved"  # never seen before -> probably auto-blocked
-    KNOWN = "known"  # approved
-    FLAGGED = "flagged"  # explicit watchlist
+    KNOWN = "known"            # approved
+    FLAGGED = "flagged"        # explicit watchlist
+    BLOCKED = "blocked"        # currently blocked at UniFi
 
 
 class ConnectionType(StrEnum):
@@ -96,14 +97,13 @@ class Device(Base):
     name: Mapped[str] = mapped_column(String(255), default="")
     hostname: Mapped[str] = mapped_column(String(255), default="")
     oui: Mapped[str] = mapped_column(String(255), default="")
-    kind: Mapped[DeviceKind] = mapped_column(String(32), default=DeviceKind.UNKNOWN, index=True)
+    kind: Mapped[DeviceKind] = mapped_column(
+        String(32), default=DeviceKind.UNKNOWN, index=True
+    )
     owner: Mapped[str] = mapped_column(String(64), default="")
     status: Mapped[DeviceStatus] = mapped_column(
         String(32), default=DeviceStatus.UNAPPROVED, index=True
     )
-    # Approval and enforcement are independent: blocking must not approve or
-    # erase the classification of a device.
-    is_blocked: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     # JSON list of SSID strings the device is allowed on.
     allowed_ssids: Mapped[list[str]] = mapped_column(JSON, default=list)
     notes: Mapped[str] = mapped_column(Text, default="")
@@ -113,14 +113,18 @@ class Device(Base):
     last_ip: Mapped[str] = mapped_column(String(45), default="")
     last_ap_mac: Mapped[str] = mapped_column(String(17), default="")
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    first_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow
+    )
 
     connection_type: Mapped[ConnectionType] = mapped_column(
         String(16), default=ConnectionType.UNKNOWN, index=True
     )
     is_online: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
     )
@@ -175,7 +179,9 @@ class Policy(Base):
 
     description: Mapped[str] = mapped_column(Text, default="")
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
     )
@@ -203,8 +209,8 @@ class Action(Base):
 
 
 class UserSource(StrEnum):
-    LOCAL = "local"  # username + password row created via the UI
-    OIDC = "oidc"  # auto-provisioned on first SSO login
+    LOCAL = "local"      # username + password row created via the UI
+    OIDC = "oidc"        # auto-provisioned on first SSO login
 
 
 class User(Base):
@@ -216,7 +222,9 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), default="", index=True)
     # Empty for OIDC users — they never log in locally.
     password_hash: Mapped[str] = mapped_column(String(255), default="")
-    source: Mapped[UserSource] = mapped_column(String(16), default=UserSource.LOCAL)
+    source: Mapped[UserSource] = mapped_column(
+        String(16), default=UserSource.LOCAL
+    )
     # Stable subject identifier for OIDC users so renaming in the IdP
     # doesn't create a duplicate.
     oidc_provider: Mapped[str] = mapped_column(String(64), default="")
@@ -224,7 +232,9 @@ class User(Base):
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     is_disabled: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow
+    )
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     sessions: Mapped[list[Session]] = relationship(
@@ -241,12 +251,18 @@ class Session(Base):
     user_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), index=True
+    )
     # For audit + revoke-all-other-sessions UX.
     user_agent: Mapped[str] = mapped_column(String(255), default="")
     ip: Mapped[str] = mapped_column(String(45), default="")
-    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow
+    )
 
     user: Mapped[User] = relationship(back_populates="sessions")
 
@@ -267,7 +283,9 @@ class OAuthProvider(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     display_name: Mapped[str] = mapped_column(String(128))
-    kind: Mapped[OAuthProviderKind] = mapped_column(String(32), default=OAuthProviderKind.AUTHENTIK)
+    kind: Mapped[OAuthProviderKind] = mapped_column(
+        String(32), default=OAuthProviderKind.AUTHENTIK
+    )
     client_id: Mapped[str] = mapped_column(String(255))
     client_secret: Mapped[str] = mapped_column(String(255))
     # OIDC discovery is run against `{issuer_url}/.well-known/openid-configuration`
@@ -279,7 +297,9 @@ class OAuthProvider(Base):
     default_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
     )
@@ -306,7 +326,9 @@ class OAuthState(Base):
     )
 
 
-__table_args__ = (UniqueConstraint("ssid", name="uq_policies_ssid"),)
+__table_args__ = (
+    UniqueConstraint("ssid", name="uq_policies_ssid"),
+)
 
 
 # ---------------------------------------------------------------------------

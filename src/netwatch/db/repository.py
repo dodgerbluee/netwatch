@@ -46,7 +46,6 @@ async def list_devices(
     owner: str | None = None,
     online_only: bool = False,
     online: bool | None = None,
-    blocked: bool | None = None,
     limit: int = 500,
 ) -> list[Device]:
     stmt = select(Device).order_by(Device.is_online.desc(), Device.last_seen_at.desc().nullslast())
@@ -63,8 +62,6 @@ async def list_devices(
         stmt = stmt.where(Device.is_online.is_(True))
     if online is not None:
         stmt = stmt.where(Device.is_online.is_(online))
-    if blocked is not None:
-        stmt = stmt.where(Device.is_blocked.is_(blocked))
     stmt = stmt.limit(limit)
     res = await session.execute(stmt)
     return list(res.scalars().all())
@@ -143,13 +140,11 @@ async def mark_offline(session: AsyncSession, mac: str) -> None:
 async def set_status(session: AsyncSession, mac: str, status: DeviceStatus) -> None:
     mac = normalize_mac(mac)
     await session.execute(update(Device).where(Device.mac == mac).values(status=status))
-    cooldown.clear(mac)
-
-
-async def set_blocked(session: AsyncSession, mac: str, blocked: bool) -> None:
-    await session.execute(
-        update(Device).where(Device.mac == normalize_mac(mac)).values(is_blocked=blocked)
-    )
+    # A status change re-arms alerting for this MAC — except the engine's own
+    # transition to BLOCKED, which must keep the re-block cooldown intact so
+    # association retries don't hammer the UniFi API.
+    if status != DeviceStatus.BLOCKED:
+        cooldown.clear(mac)
 
 
 async def set_known(

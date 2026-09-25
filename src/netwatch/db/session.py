@@ -14,12 +14,7 @@ from contextlib import asynccontextmanager
 
 from sqlalchemy import event
 from sqlalchemy.engine import Engine  # noqa: F401  re-exported for type clarity
-from sqlalchemy.ext.asyncio import (
-    AsyncEngine,
-    AsyncSession,
-    async_sessionmaker,
-    create_async_engine,
-)
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 from netwatch.config import Settings
 from netwatch.db.models import Base
@@ -91,32 +86,8 @@ def _add_missing_columns(conn: object) -> None:
             for row in conn.execute(text("PRAGMA table_info(devices)")).fetchall()  # type: ignore[union-attr]
         }
         if "connection_type" not in cols:
-            conn.execute(
-                text("ALTER TABLE devices ADD COLUMN connection_type VARCHAR(16) DEFAULT 'unknown'")
-            )  # type: ignore[union-attr]
+            conn.execute(text("ALTER TABLE devices ADD COLUMN connection_type VARCHAR(16) DEFAULT 'unknown'"))  # type: ignore[union-attr]
             log.info("db.migrate.added_column", table="devices", column="connection_type")
-        if "is_blocked" not in cols:
-            conn.execute(
-                text("ALTER TABLE devices ADD COLUMN is_blocked BOOLEAN NOT NULL DEFAULT 0")
-            )  # type: ignore[union-attr]
-            conn.execute(
-                text("CREATE INDEX IF NOT EXISTS ix_devices_is_blocked ON devices (is_blocked)")
-            )  # type: ignore[union-attr]
-            log.info("db.migrate.added_column", table="devices", column="is_blocked")
-        # Legacy rows used status='blocked', destroying their approval state.
-        # Curated policy metadata is evidence of prior approval; ambiguous rows
-        # remain unapproved rather than being silently trusted.
-        conn.execute(
-            text("""
-            UPDATE devices
-            SET is_blocked = 1,
-                status = CASE
-                    WHEN kind != 'unknown' OR owner != '' OR allowed_ssids != '[]'
-                    THEN 'known' ELSE 'unapproved'
-                END
-            WHERE status = 'blocked'
-        """)
-        )  # type: ignore[union-attr]
         _canonicalize_mac_rows(conn, normalize_mac)
 
         policy_cols = {
@@ -130,7 +101,9 @@ def _add_missing_columns(conn: object) -> None:
         log.warning("db.migrate.failed", error=repr(exc))
 
 
-def _canonicalize_mac_rows(conn: object, normalize_mac: Callable[[str], str]) -> None:
+def _canonicalize_mac_rows(
+    conn: object, normalize_mac: Callable[[str], str]
+) -> None:
     """Collapse legacy MAC spellings onto lowercase colon-separated keys."""
 
     from sqlalchemy import text
@@ -146,7 +119,9 @@ def _canonicalize_mac_rows(conn: object, normalize_mac: Callable[[str], str]) ->
         for row in conn.execute(text("PRAGMA table_info(devices)")).fetchall()  # type: ignore[union-attr]
     ]
     quoted_cols = ", ".join(f'"{col}"' for col in device_cols)
-    select_cols = ", ".join(":canonical" if col == "mac" else f'"{col}"' for col in device_cols)
+    select_cols = ", ".join(
+        ":canonical" if col == "mac" else f'"{col}"' for col in device_cols
+    )
 
     changed = 0
     for canonical, macs in groups.items():

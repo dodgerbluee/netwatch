@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from netwatch.db.models import DeviceKind, DeviceStatus
 from netwatch.policy.rules import NOTIFY_VERDICTS, Verdict, decide
 
@@ -130,12 +132,14 @@ def test_kid_owner_blocked_on_trusted(make_event, make_device, make_policy):
     assert decision.verdict == Verdict.NOTIFY_WRONG_SSID
 
 
-def test_blocked_device_reassociation_is_reblock_not_alert(make_event, make_device, make_policy):
+def test_blocked_device_reassociation_is_reblock_not_alert(
+    make_event, make_device, make_policy
+):
     """A blocked device retrying association must re-enforce the block,
     not masquerade as a fresh unknown-device notification."""
 
     decision = decide(
-        device=make_device(status=DeviceStatus.UNAPPROVED, is_blocked=True),
+        device=make_device(status=DeviceStatus.BLOCKED),
         policy=make_policy(),
         event=make_event(),
         enforcement_enabled=True,
@@ -149,28 +153,10 @@ def test_blocked_device_reassociation_respects_enforcement_off(
     make_event, make_device, make_policy
 ):
     decision = decide(
-        device=make_device(status=DeviceStatus.UNAPPROVED, is_blocked=True),
+        device=make_device(status=DeviceStatus.BLOCKED),
         policy=make_policy(),
         event=make_event(),
         enforcement_enabled=False,
     )
     assert decision.verdict == Verdict.REBLOCK
     assert decision.should_block is False
-
-
-def test_blocked_known_device_preserves_approval(make_event, make_device, make_policy):
-    device = make_device(
-        status=DeviceStatus.KNOWN,
-        owner="natalie",
-        allowed_ssids=["kidnapped bandwidth"],
-        is_blocked=True,
-    )
-    decision = decide(
-        device=device,
-        policy=make_policy(),
-        event=make_event(),
-        enforcement_enabled=True,
-    )
-    assert decision.verdict == Verdict.REBLOCK
-    assert device.status == DeviceStatus.KNOWN
-    assert device.owner == "natalie"
