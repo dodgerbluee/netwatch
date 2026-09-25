@@ -18,7 +18,12 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from netwatch.config import Settings
 from netwatch.db import session as db_session
 from netwatch.db.models import Base, DeviceStatus
-from netwatch.db.repository import set_status, upsert_device_from_sighting
+from netwatch.db.repository import (
+    get_device,
+    set_blocked,
+    set_status,
+    upsert_device_from_sighting,
+)
 from netwatch.mqtt import bus
 from netwatch.policy.engine import PolicyEngine
 from netwatch.policy.rules import Verdict
@@ -86,7 +91,7 @@ async def test_blocked_device_retry_never_alerts(db, make_event):
     event = make_event()
     await _seed_device(event)
     async with db_session.session_scope() as session:
-        await set_status(session, event.mac, DeviceStatus.BLOCKED)
+        await set_blocked(session, event.mac, True)
     engine = PolicyEngine(Settings())
 
     for _ in range(3):
@@ -103,7 +108,7 @@ async def test_status_change_rearms_alerting(db, make_event):
     await _seed_device(event)
     engine = PolicyEngine(Settings())
 
-    await engine.evaluate(event=event, device_created=True)   # alerts
+    await engine.evaluate(event=event, device_created=True)  # alerts
     await engine.evaluate(event=event, device_created=False)  # suppressed
 
     # Operator flags the device -> cooldown re-arms -> next sighting alerts.
@@ -113,3 +118,32 @@ async def test_status_change_rearms_alerting(db, make_event):
 
     assert flagged is not None and flagged.verdict == Verdict.NOTIFY_FLAGGED
     assert [de.notify for de in _drain_bus()] == [True, False, True]
+
+
+async def test_unblock_preserves_unapproved_status(db, make_event, monkeypatch):
+    event = make_event()
+    await _seed_device(event)
+    async with db_session.session_scope() as session:
+        await set_blocked(session, event.mac, True)
+
+    class FakeUnifiClient:
+        def __init__(self, _settings):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            pass
+
+        async def unblock_client(self, _mac):
+            return True
+
+    monkeypatch.setattr("netwatch.policy.engine.UnifiClient", FakeUnifiClient)
+    assert await PolicyEngine(Settings()).unblock(event.mac) is True
+
+    async with db_session.session_scope() as session:
+        device = await get_device(session, event.mac)
+        assert device is not None
+        assert device.status == DeviceStatus.UNAPPROVED
+        assert device.is_blocked is False

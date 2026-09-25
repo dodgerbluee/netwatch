@@ -35,6 +35,7 @@ async def run_mqtt_bridge(settings: Settings) -> None:
     discovery = mqtt_cfg.discovery_prefix
     # Unique client ID to avoid broker kicking us on ID collision.
     import uuid
+
     client_id = f"{mqtt_cfg.client_id}-{uuid.uuid4().hex[:8]}"
 
     while True:
@@ -59,9 +60,7 @@ async def run_mqtt_bridge(settings: Settings) -> None:
                 await _publish_discovery(client, base, discovery, base_url)
 
                 # 2. Set status online.
-                await client.publish(
-                    _topic(base, "status"), b"running", qos=1, retain=True
-                )
+                await client.publish(_topic(base, "status"), b"running", qos=1, retain=True)
 
                 # 3. Replace stale retained alert payloads with valid JSON so
                 # HA automations that read payload_json.verdict evaluate false
@@ -90,9 +89,7 @@ async def run_mqtt_bridge(settings: Settings) -> None:
                     qos=1,
                     retain=True,
                 )
-                await client.publish(
-                    _topic(base, "alert"), b"off", qos=1, retain=True
-                )
+                await client.publish(_topic(base, "alert"), b"off", qos=1, retain=True)
 
                 # 4. Publish initial counts.
                 await _publish_counts(client, base)
@@ -134,14 +131,15 @@ async def _publish_discovery(
             ),
         )
     )
-    for status in (DeviceStatus.KNOWN, DeviceStatus.FLAGGED, DeviceStatus.UNAPPROVED, DeviceStatus.BLOCKED):
+    for status in (*DeviceStatus, "blocked"):
+        value = status.value if isinstance(status, DeviceStatus) else status
         entities.append(
             (
-                f"{discovery}/sensor/netwatch/{status}_count/config",
+                f"{discovery}/sensor/netwatch/{value}_count/config",
                 sensor(
-                    unique_id=f"netwatch_{status}_count",
-                    name=f"Netwatch {status.title()} Devices",
-                    state_topic=_topic(base, "counts", status.value),
+                    unique_id=f"netwatch_{value}_count",
+                    name=f"Netwatch {value.title()} Devices",
+                    state_topic=_topic(base, "counts", value),
                     icon="mdi:devices",
                     unit_of_measurement="devices",
                     base_url=base_url,
@@ -188,9 +186,7 @@ async def _publish_discovery(
     )
 
     for topic, payload in entities:
-        await client.publish(
-            topic, json.dumps(payload).encode(), qos=1, retain=True
-        )
+        await client.publish(topic, json.dumps(payload).encode(), qos=1, retain=True)
     log.info("mqtt.discovery.published", count=len(entities))
 
 
@@ -221,10 +217,7 @@ async def _decision_loop(client: aiomqtt.Client, base: str) -> None:
             qos=1,
             retain=True,
         )
-        summary = (
-            f"{de.decision.verdict.value}: {device_label} "
-            f"-> {de.event.ssid or '?'}"
-        )
+        summary = f"{de.decision.verdict.value}: {device_label} -> {de.event.ssid or '?'}"
         await client.publish(
             _topic(base, "last_event/summary"),
             summary.encode(),
@@ -234,9 +227,7 @@ async def _decision_loop(client: aiomqtt.Client, base: str) -> None:
         # Alert binary sensor: on for notify verdicts only. REBLOCK is a
         # handled situation (block re-enforced), not something pending.
         alert_state = "on" if de.decision.verdict in NOTIFY_VERDICTS else "off"
-        await client.publish(
-            _topic(base, "alert"), alert_state.encode(), qos=1, retain=True
-        )
+        await client.publish(_topic(base, "alert"), alert_state.encode(), qos=1, retain=True)
 
         # Fire-once notification event. Non-retained and cooldown-gated by
         # the engine, so automations can trigger on it without replaying
@@ -287,10 +278,19 @@ async def _publish_counts(client: aiomqtt.Client, base: str) -> None:
                 select(func.count(Device.mac)).where(Device.status == status)
             )
             counts[status] = int(res.scalar_one())
+        blocked = await session.execute(
+            select(func.count(Device.mac)).where(Device.is_blocked.is_(True))
+        )
     for status, n in counts.items():
         await client.publish(
             _topic(base, "counts", status.value), str(n).encode(), qos=1, retain=True
         )
+    await client.publish(
+        _topic(base, "counts", "blocked"),
+        str(int(blocked.scalar_one())).encode(),
+        qos=1,
+        retain=True,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -343,6 +343,7 @@ async def _command_loop(
                 unifi_ok = await engine.unblock(mac)
                 if ssids:
                     from netwatch.unifi.client import UnifiClient
+
                     try:
                         async with UnifiClient(settings.unifi) as unifi:
                             await unifi.enforce_ssid_restrictions(mac, ssids)

@@ -10,8 +10,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import update
-
 from netwatch.config import Settings
 from netwatch.db.models import ConnectionType, Device, DeviceStatus
 from netwatch.db.repository import sync_unifi_alias
@@ -46,12 +44,10 @@ async def full_sync(settings: Settings) -> SyncResult:
         active_clients = await unifi.list_active_clients()
 
     active_macs = {normalize_mac(c.get("mac") or "") for c in active_clients if c.get("mac")}
-    blocked_macs = {
-        normalize_mac(u.get("mac") or "")
-        for u in known_clients
-        if u.get("blocked")
-    }
-    log.debug("unifi.sync.blocked_from_unifi", count=len(blocked_macs), macs=list(blocked_macs)[:10])
+    blocked_macs = {normalize_mac(u.get("mac") or "") for u in known_clients if u.get("blocked")}
+    log.debug(
+        "unifi.sync.blocked_from_unifi", count=len(blocked_macs), macs=list(blocked_macs)[:10]
+    )
 
     result = SyncResult(fetched=len(known_clients))
 
@@ -92,14 +88,13 @@ async def full_sync(settings: Settings) -> SyncResult:
                 else:
                     result.offline_marked += 1
 
-        # 3. Sync blocked status (bidirectional)
-        # Pull: UniFi blocked -> netwatch blocked.
-        # UniFi is the authority — if a device is blocked there, the app
-        # reflects it. (Approve unblocks at UniFi, so no false conflicts.)
+        # 3. UniFi is authoritative for current block state. Approval status
+        # remains untouched.
         existing_macs = {d.mac for d in all_devices}
         for device in all_devices:
-            if device.mac in blocked_macs and device.status != DeviceStatus.BLOCKED:
-                device.status = DeviceStatus.BLOCKED
+            blocked = device.mac in blocked_macs
+            if device.is_blocked != blocked:
+                device.is_blocked = blocked
                 result.blocked_synced += 1
 
         # Create device rows for blocked clients not yet in DB
@@ -111,30 +106,12 @@ async def full_sync(settings: Settings) -> SyncResult:
                 name=(u.get("name") or "").strip() or mac,
                 hostname=(u.get("hostname") or "").strip(),
                 oui=(u.get("oui") or "").strip(),
-                status=DeviceStatus.BLOCKED,
+                status=DeviceStatus.UNAPPROVED,
+                is_blocked=True,
                 is_online=False,
             )
             session.add(device)
             result.blocked_synced += 1
-
-    # Push: netwatch blocked -> UniFi blocked (only when enforcement is on)
-    if settings.enforcement_enabled:
-        async with session_scope() as session:
-            from sqlalchemy import select
-            res = await session.execute(
-                select(Device.mac).where(Device.status == DeviceStatus.BLOCKED)
-            )
-            netwatch_blocked = {row[0] for row in res.all()}
-
-        to_block_in_unifi = netwatch_blocked - blocked_macs
-        if to_block_in_unifi:
-            async with UnifiClient(settings.unifi) as unifi:
-                for mac in to_block_in_unifi:
-                    try:
-                        await unifi.block_client(mac)
-                        result.blocked_synced += 1
-                    except Exception as exc:  # noqa: BLE001
-                        log.warning("unifi.sync.block_push_failed", mac=mac, error=repr(exc))
 
     log.info(
         "unifi.full_sync.done",

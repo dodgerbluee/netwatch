@@ -12,16 +12,12 @@ so this module is mostly orchestration.
 from __future__ import annotations
 
 from netwatch.config import Settings
-from netwatch.db.models import (
-    ActionKind,
-    ActionResult,
-    DeviceStatus,
-)
+from netwatch.db.models import ActionKind, ActionResult
 from netwatch.db.repository import (
     get_device,
     get_policy,
     record_action,
-    set_status,
+    set_blocked,
 )
 from netwatch.db.session import session_scope
 from netwatch.logging import get_logger
@@ -41,9 +37,7 @@ class PolicyEngine:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
 
-    async def evaluate(
-        self, *, event: NetworkEvent, device_created: bool
-    ) -> Decision | None:
+    async def evaluate(self, *, event: NetworkEvent, device_created: bool) -> Decision | None:
         """Evaluate a single event and dispatch any required side effects."""
 
         from netwatch.db.config_store import get_config
@@ -59,7 +53,7 @@ class PolicyEngine:
                 return None
 
             device_name = device.name or ""
-            was_blocked = device.status == DeviceStatus.BLOCKED
+            was_blocked = device.is_blocked
 
             decision = decide(
                 device=device,
@@ -116,7 +110,7 @@ class PolicyEngine:
                     context={"verdict": decision.verdict.value},
                 )
                 if blocked:
-                    await set_status(session, event.mac, DeviceStatus.BLOCKED)
+                    await set_blocked(session, event.mac, True)
                     first_block = not was_blocked
         else:
             if notify:
@@ -140,9 +134,7 @@ class PolicyEngine:
         )
         return decision
 
-    async def _reblock(
-        self, event: NetworkEvent, decision: Decision, device_name: str
-    ) -> None:
+    async def _reblock(self, event: NetworkEvent, decision: Decision, device_name: str) -> None:
         if decision.should_block and cooldown.ready(cooldown.reblock_key(event.mac)):
             log.info("policy.reblock", mac=event.mac, reason=decision.reason)
             blocked = await self._block(event)
@@ -192,5 +184,6 @@ class PolicyEngine:
                 reason="manual unblock",
             )
             if ok:
-                await set_status(session, mac, DeviceStatus.KNOWN)
+                await set_blocked(session, mac, False)
+                cooldown.clear(mac)
         return ok

@@ -12,9 +12,9 @@
       'unapproved': 'bg-amber-500/20 text-amber-300 border-amber-500/40',
       'known':      'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
       'flagged':    'bg-rose-500/20 text-rose-300 border-rose-500/40',
-      'blocked':    'bg-slate-500/20 text-slate-300 border-slate-500/40',
     }[d.status] %}
     <span class="inline-block px-2 py-0.5 rounded-md border text-xs {{ badge }}">{{ d.status }}</span>
+    {% if d.is_blocked %}<span class="inline-block px-2 py-0.5 rounded-md border text-xs bg-slate-500/20 text-slate-300 border-slate-500/40">blocked</span>{% endif %}
     {% if d.is_online %}<span class="ml-1 text-emerald-400">●</span>{% endif %}
   </td>
   <td class="px-3 py-2 font-medium">{{ d.name or "(unnamed)" }}</td>
@@ -53,7 +53,7 @@
         hx-confirm="Mark {{ d.name or d.mac }} as unknown?"
       >Unapprove</button>
     {% endif %}
-    {% if d.status == "blocked" %}
+    {% if d.is_blocked %}
       <button
         class="px-2 py-1 text-xs rounded-md border border-slate-500/40 text-slate-200 hover:bg-slate-500/10"
         hx-post="/devices/{{ d.mac }}/unblock"

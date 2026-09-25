@@ -53,8 +53,8 @@ from netwatch.db.repository import (
     list_policies,
     record_action,
     recent_sightings,
+    set_blocked,
     set_known,
-    set_status,
     upsert_policy,
 )
 from netwatch.db.session import get_engine, session_scope
@@ -142,9 +142,7 @@ def _install_auth_middleware(app: FastAPI, settings: Settings) -> None:
         if wants_html:
             from urllib.parse import quote
 
-            return RedirectResponse(
-                f"/login?next={quote(path, safe='/')}", status_code=303
-            )
+            return RedirectResponse(f"/login?next={quote(path, safe='/')}", status_code=303)
         return JSONResponse({"error": "login required"}, status_code=401)
 
 
@@ -209,7 +207,9 @@ def _register_routes(app: FastAPI) -> None:
                 await conn.exec_driver_sql("SELECT 1")
         except Exception as exc:  # noqa: BLE001
             raise HTTPException(status_code=503, detail=str(exc)) from exc
-        return {"status": "ready"}    # ----- HTML pages ----------------------------------------------------
+        return {
+            "status": "ready"
+        }  # ----- HTML pages ----------------------------------------------------
 
     @app.get("/", response_class=HTMLResponse)
     async def index(
@@ -228,12 +228,14 @@ def _register_routes(app: FastAPI) -> None:
         elif online == "offline":
             online_filter = False
         async with session_scope() as session:
+            blocked_filter = True if effective == "blocked" else None
             devices = await list_devices(
                 session,
-                status=DeviceStatus(effective) if effective else None,
+                status=DeviceStatus(effective) if effective and effective != "blocked" else None,
                 connection_type=ConnectionType(conn) if conn else None,
                 owner=owner if owner else None,
                 online=online_filter,
+                blocked=blocked_filter,
             )
             policies = await list_policies(session)
             owners = await list_owners(session)
@@ -285,22 +287,17 @@ def _register_routes(app: FastAPI) -> None:
         # Build per-SSID buckets: {ssid: {"online": [...], "offline": [...]}}
         networks: list[dict] = []
         for policy in policies:
-            online = [
-                d for d in all_devices
-                if d.is_online and d.last_ssid == policy.ssid
-            ]
+            online = [d for d in all_devices if d.is_online and d.last_ssid == policy.ssid]
             offline = [
-                d for d in all_devices
+                d
+                for d in all_devices
                 if not d.is_online
                 and d.status == DeviceStatus.KNOWN
                 and policy.ssid in (d.allowed_ssids or [])
             ]
             networks.append({"policy": policy, "online": online, "offline": offline})
 
-        wired = [
-            d for d in all_devices
-            if d.connection_type == "wired"
-        ]
+        wired = [d for d in all_devices if d.connection_type == "wired"]
 
         return templates.TemplateResponse(
             request,
@@ -370,6 +367,8 @@ def _register_routes(app: FastAPI) -> None:
             )
         unifi_ok = await _apply_ssid_restrictions(settings, mac, ssids, unblock=True)
         async with session_scope() as session:
+            if unifi_ok:
+                await set_blocked(session, mac, False)
             await record_action(
                 session,
                 mac=mac,
@@ -415,6 +414,8 @@ def _register_routes(app: FastAPI) -> None:
             )
         unifi_ok = await _apply_ssid_restrictions(settings, mac, ssids, unblock=True)
         async with session_scope() as session:
+            if unifi_ok:
+                await set_blocked(session, mac, False)
             await record_action(
                 session,
                 mac=mac,
@@ -430,9 +431,13 @@ def _register_routes(app: FastAPI) -> None:
             )
         if from_modal:
             return await _device_detail_modal(
-                request, mac, templates,
-                filter_status=filter_status, filter_conn=filter_conn,
-                filter_owner=filter_owner, filter_online=filter_online,
+                request,
+                mac,
+                templates,
+                filter_status=filter_status,
+                filter_conn=filter_conn,
+                filter_owner=filter_owner,
+                filter_online=filter_online,
                 include_row_update=True,
             )
         return await _device_row(request, mac, templates)
@@ -471,14 +476,18 @@ def _register_routes(app: FastAPI) -> None:
         if ssids:
             await _apply_ssid_restrictions(settings, mac, ssids)
         else:
-            await _block_client(settings, mac)
-            async with session_scope() as session:
-                await set_status(session, mac, DeviceStatus.BLOCKED)
+            if await _block_client(settings, mac):
+                async with session_scope() as session:
+                    await set_blocked(session, mac, True)
         if from_modal:
             return await _device_detail_modal(
-                request, mac, templates,
-                filter_status=filter_status, filter_conn=filter_conn,
-                filter_owner=filter_owner, filter_online=filter_online,
+                request,
+                mac,
+                templates,
+                filter_status=filter_status,
+                filter_conn=filter_conn,
+                filter_owner=filter_owner,
+                filter_online=filter_online,
                 include_row_update=True,
             )
         return await _device_row(request, mac, templates)
@@ -499,11 +508,10 @@ def _register_routes(app: FastAPI) -> None:
         if not new_name:
             raise HTTPException(400, "name is required")
         async with session_scope() as session:
-            await session.execute(
-                update(Device).where(Device.mac == mac).values(name=new_name)
-            )
+            await session.execute(update(Device).where(Device.mac == mac).values(name=new_name))
         if settings.unifi.configured:
             from netwatch.unifi.client import UnifiClient
+
             try:
                 async with UnifiClient(settings.unifi) as unifi:
                     await unifi.rename_client(mac, new_name)
@@ -511,9 +519,13 @@ def _register_routes(app: FastAPI) -> None:
                 log.warning("ui.rename.unifi_failed", mac=mac, error=repr(exc))
         if from_modal:
             return await _device_detail_modal(
-                request, mac, templates,
-                filter_status=filter_status, filter_conn=filter_conn,
-                filter_owner=filter_owner, filter_online=filter_online,
+                request,
+                mac,
+                templates,
+                filter_status=filter_status,
+                filter_conn=filter_conn,
+                filter_owner=filter_owner,
+                filter_online=filter_online,
                 include_row_update=True,
             )
         return await _device_row(request, mac, templates)
@@ -564,10 +576,14 @@ def _register_routes(app: FastAPI) -> None:
         cooldown.clear(mac)
         if settings.unifi.configured:
             from netwatch.unifi.client import UnifiClient
+
             try:
                 async with UnifiClient(settings.unifi) as unifi:
                     await unifi.clear_ssid_restrictions(mac)
-                    await unifi.block_client(mac)
+                    blocked = await unifi.block_client(mac)
+                if blocked:
+                    async with session_scope() as session:
+                        await set_blocked(session, mac, True)
             except Exception:  # noqa: BLE001
                 pass
         return await _device_row(request, mac, templates)
@@ -598,12 +614,19 @@ def _register_routes(app: FastAPI) -> None:
                 allowed_ssids=ssids,
                 name=device.name or None,
             )
-        await _apply_ssid_restrictions(settings, mac, ssids, unblock=True)
+        unifi_ok = await _apply_ssid_restrictions(settings, mac, ssids, unblock=True)
+        if unifi_ok:
+            async with session_scope() as session:
+                await set_blocked(session, mac, False)
         if from_modal:
             return await _device_detail_modal(
-                request, mac, templates,
-                filter_status=filter_status, filter_conn=filter_conn,
-                filter_owner=filter_owner, filter_online=filter_online,
+                request,
+                mac,
+                templates,
+                filter_status=filter_status,
+                filter_conn=filter_conn,
+                filter_owner=filter_owner,
+                filter_online=filter_online,
                 include_row_update=True,
             )
         return await _device_row(request, mac, templates)
@@ -611,14 +634,15 @@ def _register_routes(app: FastAPI) -> None:
     @app.post("/devices/{mac}/block", response_class=HTMLResponse)
     async def block(mac: str, request: Request) -> HTMLResponse:
         mac = normalize_mac(mac)
-        async with session_scope() as session:
-            await set_status(session, mac, DeviceStatus.BLOCKED)
         # Best-effort actual block at UniFi
         from netwatch.unifi.client import UnifiClient
 
         try:
             async with UnifiClient(settings.unifi) as unifi:
-                await unifi.block_client(mac)
+                ok = await unifi.block_client(mac)
+            if ok:
+                async with session_scope() as session:
+                    await set_blocked(session, mac, True)
         except Exception as exc:  # noqa: BLE001
             log.warning("ui.block.failed", mac=mac, error=repr(exc))
         return await _device_row(request, mac, templates)
@@ -667,9 +691,7 @@ def _register_routes(app: FastAPI) -> None:
             r = await full_sync(settings)
         except Exception as exc:  # noqa: BLE001
             log.warning("ui.sync.failed", error=repr(exc))
-            return HTMLResponse(
-                f'<span class="text-rose-300 text-xs">sync failed: {exc}</span>'
-            )
+            return HTMLResponse(f'<span class="text-rose-300 text-xs">sync failed: {exc}</span>')
         parts = []
         if r.aliases_updated:
             parts.append(f"{r.aliases_updated} name{'s' if r.aliases_updated != 1 else ''}")
@@ -680,9 +702,7 @@ def _register_routes(app: FastAPI) -> None:
         if r.blocked_synced:
             parts.append(f"{r.blocked_synced} blocked")
         summary = ", ".join(parts) if parts else "everything up to date"
-        return HTMLResponse(
-            f'<span class="text-emerald-300 text-xs">synced: {summary}</span>'
-        )
+        return HTMLResponse(f'<span class="text-emerald-300 text-xs">synced: {summary}</span>')
 
     # ----- Export / Import ----------------------------------------------
 
@@ -728,7 +748,7 @@ def _register_routes(app: FastAPI) -> None:
         if confirm != "REPLACE":
             return HTMLResponse(
                 '<span class="text-amber-300 text-xs">'
-                'Refusing to import: type REPLACE to confirm.</span>',
+                "Refusing to import: type REPLACE to confirm.</span>",
                 status_code=400,
             )
 
@@ -762,8 +782,8 @@ def _register_routes(app: FastAPI) -> None:
 
         return HTMLResponse(
             '<span class="text-emerald-300 text-xs">'
-            'imported successfully — refreshing…</span>'
-            '<script>setTimeout(() => location.reload(), 800)</script>'
+            "imported successfully — refreshing…</span>"
+            "<script>setTimeout(() => location.reload(), 800)</script>"
         )
 
     # ----- Debug API -------------------------------------------------------
@@ -809,69 +829,70 @@ def _register_routes(app: FastAPI) -> None:
             devices = (await session.execute(q)).scalars().all()
 
             # Policies
-            policies = (
-                await session.execute(select(Policy).order_by(Policy.ssid))
-            ).scalars().all()
+            policies = (await session.execute(select(Policy).order_by(Policy.ssid))).scalars().all()
 
         enforcement = bool(general_cfg.get("enforcement_enabled", False))
 
-        return JSONResponse({
-            "enforcement_enabled": enforcement,
-            "filter": {"mac": mac_filter or None, "limit": limit},
-            "devices": [
-                {
-                    "mac": d.mac,
-                    "name": d.name,
-                    "status": d.status,
-                    "kind": d.kind,
-                    "owner": d.owner,
-                    "allowed_ssids": d.allowed_ssids,
-                    "connection_type": d.connection_type,
-                    "is_online": d.is_online,
-                    "last_ssid": d.last_ssid,
-                    "last_seen_at": d.last_seen_at.isoformat() if d.last_seen_at else None,
-                    "updated_at": d.updated_at.isoformat() if d.updated_at else None,
-                }
-                for d in devices
-            ],
-            "actions": [
-                {
-                    "id": a.id,
-                    "mac": a.mac,
-                    "ssid": a.ssid,
-                    "kind": a.kind,
-                    "result": a.result,
-                    "reason": a.reason,
-                    "context": a.context,
-                    "created_at": a.created_at.isoformat() if a.created_at else None,
-                }
-                for a in actions
-            ],
-            "sightings": [
-                {
-                    "id": s.id,
-                    "mac": s.mac,
-                    "device_name": s.device.name if s.device else None,
-                    "device_status": s.device.status if s.device else None,
-                    "event": s.event,
-                    "ssid": s.ssid,
-                    "ip": s.ip,
-                    "ap_mac": s.ap_mac,
-                    "rssi": s.rssi,
-                    "observed_at": s.observed_at.isoformat() if s.observed_at else None,
-                }
-                for s in sightings
-            ],
-            "policies": [
-                {
-                    "ssid": p.ssid,
-                    "auto_block_unknown": p.auto_block_unknown,
-                    "allow_kinds": p.allow_kinds,
-                    "allow_owners": p.allow_owners,
-                }
-                for p in policies
-            ],
-        })
+        return JSONResponse(
+            {
+                "enforcement_enabled": enforcement,
+                "filter": {"mac": mac_filter or None, "limit": limit},
+                "devices": [
+                    {
+                        "mac": d.mac,
+                        "name": d.name,
+                        "status": d.status,
+                        "is_blocked": d.is_blocked,
+                        "kind": d.kind,
+                        "owner": d.owner,
+                        "allowed_ssids": d.allowed_ssids,
+                        "connection_type": d.connection_type,
+                        "is_online": d.is_online,
+                        "last_ssid": d.last_ssid,
+                        "last_seen_at": d.last_seen_at.isoformat() if d.last_seen_at else None,
+                        "updated_at": d.updated_at.isoformat() if d.updated_at else None,
+                    }
+                    for d in devices
+                ],
+                "actions": [
+                    {
+                        "id": a.id,
+                        "mac": a.mac,
+                        "ssid": a.ssid,
+                        "kind": a.kind,
+                        "result": a.result,
+                        "reason": a.reason,
+                        "context": a.context,
+                        "created_at": a.created_at.isoformat() if a.created_at else None,
+                    }
+                    for a in actions
+                ],
+                "sightings": [
+                    {
+                        "id": s.id,
+                        "mac": s.mac,
+                        "device_name": s.device.name if s.device else None,
+                        "device_status": s.device.status if s.device else None,
+                        "event": s.event,
+                        "ssid": s.ssid,
+                        "ip": s.ip,
+                        "ap_mac": s.ap_mac,
+                        "rssi": s.rssi,
+                        "observed_at": s.observed_at.isoformat() if s.observed_at else None,
+                    }
+                    for s in sightings
+                ],
+                "policies": [
+                    {
+                        "ssid": p.ssid,
+                        "auto_block_unknown": p.auto_block_unknown,
+                        "allow_kinds": p.allow_kinds,
+                        "allow_owners": p.allow_owners,
+                    }
+                    for p in policies
+                ],
+            }
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -933,13 +954,17 @@ async def _device_detail_modal(
         policies = await list_policies(session)
         owners = await list_owners(session)
         actions = (
-            await session.execute(
-                select(Action)
-                .where(Action.mac == mac)
-                .order_by(Action.created_at.desc())
-                .limit(25)
+            (
+                await session.execute(
+                    select(Action)
+                    .where(Action.mac == mac)
+                    .order_by(Action.created_at.desc())
+                    .limit(25)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
     row_visible = _matches_device_filters(
         device,
         status=filter_status,
@@ -973,7 +998,10 @@ def _matches_device_filters(
     owner: str,
     online: str = "",
 ) -> bool:
-    if status and device.status != status:
+    if status == "blocked":
+        if not device.is_blocked:
+            return False
+    elif status and device.status != status:
         return False
     if connection_type and device.connection_type != connection_type:
         return False
@@ -1029,16 +1057,17 @@ async def _apply_ssid_restrictions(
         return False
 
 
-async def _block_client(settings: Settings, mac: str) -> None:
+async def _block_client(settings: Settings, mac: str) -> bool:
     if not settings.unifi.configured:
-        return
+        return True
     from netwatch.unifi.client import UnifiClient
 
     try:
         async with UnifiClient(settings.unifi) as unifi:
-            await unifi.block_client(mac)
+            return await unifi.block_client(mac)
     except Exception as exc:  # noqa: BLE001
         log.warning("ui.block.failed", mac=mac, error=repr(exc))
+        return False
 
 
 def _cleanup_dir(path: Path):
